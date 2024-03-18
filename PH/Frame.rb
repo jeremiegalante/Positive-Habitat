@@ -84,7 +84,7 @@ class Frame
           when "PVW"; @pse[:VW] = value
           when "BSO"; @bso = (value == "X" ? true : false)
           when "MET"; @met_seated = (value == "X" ? true : false)
-          when "TOP"; @top = (value == "X" ? true : false)
+          when "TOP"; @top = (value == "X" ? true : false); puts "PPPPP - #{value}"
           when "BOT"; @bottom = (value == "X" ? true : false)
         end
       end

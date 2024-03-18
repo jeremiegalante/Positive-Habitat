@@ -1,57 +1,51 @@
 '''
-load "E:/#Positive Habitat/PH/Toolbar/Frame_Toolbar.rb"
+load "E:/#Positive Habitat/PH/Toolbar/PH_Toolbar.rb"
 '''
+
 #Load Sketchup Requires
 require "sketchup.rb"
 
 #Load PH Requires
-require_relative "../Frame.rb"
+require_relative '../PH'
+require_relative "../PH_PreCadre"
 
 
-#FRAME TOOLBAR
-tbFrame = UI::Toolbar.new("Frame") {
+#PH TOOLBAR
+toolbarPH = UI::Toolbar.new("Frame") {
   #Reload the Frame RB source file
   load '../Frame.rb'
 }
 
-#COMMANDS
-#Generate Frame drawing query
+#PRE-CADRE COMMANDS
+#Generate Pré-Cadre drawing query
 cmd = UI::Command.new("Draw") {
   #Request the Frame Nomenclature
-  prompts = ["Ossature Mat [OSS]",
-             "FRAME Length [L]",
-             "FRAME Thickness [T]",
-             "FRAME Height [H]",
-             "FRAME Over Height [OH]",
-             "FRAME PSE Offset [OFF]",
-             "FRAME PSE_Thickness [PT]",
-             "FRAME PSE_HWidth [PHW]",
-             "FRAME PSE_VWidth [PVW]",
-             "OPTION_SunScreen [BSO]",
-             "OPTION_Metal Seated [MET]",
-             "OPTION_Top Covering [TOP]"]
-  defaults = ["TreplisT19","2500", "400", "3000", "0", "5", "78", "90","52", "X", "X", ""]
-  answersArray = UI.inputbox(prompts, defaults, "Frame Parameters and Options.")
+  ids = ["ID", "WT", "MATO", "MATF", "FL", "FH", "FSH", "FC", "FD", "FE", "VR", "CS"]
+  prompts = ["NUM POSTE [#{ids[0]}]",
+             "MUR_Epaisseur [#{ids[1]}]",
+             "MATIÈRE_Ossature [#{ids[2]}]",
+             "MATIÈRE_Finition [#{ids[3]}]",
+             "FENÊTRE_Longueur [#{ids[4]}]",
+             "FENÊTRE_Hauteur [#{ids[5]}]",
+             "FENÊTRE_Sur-Hauteur [#{ids[6]}]",
+             "FENÊTRE_Jeu Compribande [#{ids[7]}]",
+             "FENÊTRE_Distance Mur Extérieur [#{ids[8]}]",
+             "FENÊTRE_Epaisseur [#{ids[9]}]",
+             "OPTION_Coffre Vollet [#{ids[10]}]",
+             "OPTION_Châpeau Supérieur [#{ids[11]}]"]
+  defaults = ["0", "400", "TreplisT19","", "3000", "2000", "0", "5", "200", "78", "X", "X"]
+  answersArray = UI.inputbox(prompts, defaults, "Paramètres du PréCadre.")
 
   #Convert to hash answers
-  answersHash = {}
-  answersArray.each_with_index do |ans_value, ans_index|
-    #Extract value Key
-    ans_title = prompts[ans_index]
-    key = ans_title[ans_title.index("[")+1...-1]
-
-    #Store requested value for key
-    puts "#{key} - #{ans_value}"
-    answersHash[key] = ans_value
-  end
+  answersHash = Hash[ids.zip(answersArray)]
 
   #Generate Drawing
-  frame = Frame.new(argNomenclature=answersHash)
-  frame.draw
+  pcPoste = PH::PreCadre.new(answersHash)
+  pcPoste.draw
 }
 
 #Command Specs
-tbFrame = tbFrame.add_item cmd
+toolbarPH = toolbarPH.add_item cmd
 icon_path = "#{__dir__}/Icons/Frame_Toolbar/frame window 256x256.png"
 cmd.small_icon = icon_path
 cmd.large_icon = icon_path
@@ -78,5 +72,5 @@ cmd.small_icon = "Frame_Icons_[24x24]_Frame Window.png"
 cmd.large_icon = "Frame_Icons_[24x24]_Frame Window.png"
 
 #Add the Frame Command
-tbFrame = tbFrame.add_item cmd
-tbFrame.show
+toolbarPH = toolbarPH.add_item cmd
+toolbarPH.show

@@ -14,7 +14,7 @@
   "WindowPSE": {
     "OCL_RGBA":[255,255,100,1]
   },
-  "FramePSE": {
+  "PreCadre": {
     "OCL_RGBA":[32,255,255,1]
   }
 }
