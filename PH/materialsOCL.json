@@ -1,0 +1,20 @@
+{
+  "TreplisT10": {
+    "OCL_RGBA":[255,100,255,1],
+    "Thickness": 10
+  },
+  "TreplisT19": {
+    "OCL_RGBA":[30,255,128,1],
+    "Thickness": 19
+  },
+  "SupportT10": {
+    "OCL_RGBA":[255,100,255,1],
+    "Thickness": 10
+  },
+  "WindowPSE": {
+    "OCL_RGBA":[255,255,100,1]
+  },
+  "FramePSE": {
+    "OCL_RGBA":[32,255,255,1]
+  }
+}
