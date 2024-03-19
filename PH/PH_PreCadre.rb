@@ -1,9 +1,3 @@
-'''
-load "E:/#Positive Habitat/PH/Frame.rb"
-frame = Frame.new(argNomenclature="FRAME|T78HW97VW52_L2500T400H3000OH500LI45OFF5_BSO|MET|TOP_TreplisT19")
-frame.draw
-'''
-
 #Load generic Requires
 require 'json'
 
@@ -72,7 +66,7 @@ class PH::PreCadre
     #Generate Windows Poste Container
     @object = Sketchup.active_model.active_entities.add_group
     @objectPurgeEntities = [@object.entities.add_cpoint(Geom::Point3d.new)]
-    @object.name = "POSTE#{@poste_id}"
+    @object.name = @poste_name
 
   end
 
@@ -141,26 +135,21 @@ class PH::PreCadre
       "Y" => [0, @wall_thickness],
       "Z" => [0, 0]
     }
-    montantHeight = @win_height + @win_overHeight + 58 + (@cup_hat ? PH::CFG.getOCLmaterialData("SupportT10")["Thickness"] + @offset : 0)
+    montantHeight = @win_height + @win_overHeight + 45 + (@cup_hat ? PH::CFG.getOCLmaterialData("SupportT10")["Thickness"] + @offset : 0) + (@vr ? 188 : 0)
 
     ##Define Component Names
     componentDefinitionName = "MONTANT_W#{@wall_thickness}T#{@mat["Thickness"]}H#{montantHeight}"
     componentInstanceName = "#{@poste_name}_Montant"
 
-    ##Create Montants Container for Items
-    newGroup = @object.entities.add_group()
-    @objectPurgeEntities << newGroup.entities.add_cpoint(Geom::Point3d.new)
-    newGroup.name = "Montants"
-
     ##Generate Items
     itemComponentInstances = []
 
     ##Generate Left Instance
-    itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -montantHeight, argCIname:componentInstanceName, argCDname:componentDefinitionName, argCIpos:[-(@mat["Thickness"]), 0, 0], argContainer:newGroup)
+    itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -montantHeight, argCDname:componentDefinitionName, argCIpos:[-(@mat["Thickness"]), 0, 0], argContainer:@object)
     itemComponentInstances[-1].name = "#{componentInstanceName} Gauche"
 
     ##Generate Right Instance
-    itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -montantHeight, argCIname:componentInstanceName, argCDname:componentDefinitionName, argCIpos:[@win_length+2*@offset, 0, 0], argContainer:newGroup)
+    itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -montantHeight, argCDname:componentDefinitionName, argCIpos:[@win_length+2*@offset, 0, 0], argContainer:@object)
     itemComponentInstances[-1].name = "#{componentInstanceName} Droit"
 
     ##Rename and convert to OCL
@@ -181,10 +170,10 @@ class PH::PreCadre
 
       #Define Component Names
       componentDefinitionName = "CHAPEAU_L#{@wall_thickness}W#{@mat["Thickness"]}T#{montantHeight}"
-      componentInstanceName = "#{@poste_name}_Montant"
+      componentInstanceName = "#{@poste_name}_Chapeau"
 
       #Generate Instance
-      itemComponentInstance = PH::SKP.drawOBJ(coordsObj, cupHatLength, argCIname:componentInstanceName, argCDname:componentDefinitionName, argCIpos:[-(@mat["Thickness"]), 0, montantHeight], argContainer:newGroup)
+      itemComponentInstance = PH::SKP.drawOBJ(coordsObj, cupHatLength, argCIname:componentInstanceName, argCDname:componentDefinitionName, argCIpos:[-(@mat["Thickness"]), 0, montantHeight], argContainer:@object)
       PH::SKP.toOCL(itemComponentInstance, "SupportT10")
       itemComponentInstance.name = componentInstanceName
     end
@@ -202,7 +191,7 @@ class PH::PreCadre
     }
 
     ##Define Component Names
-    componentDefinitionName = "DESSOUS_L#{@wall_thickness}W#{@wall_thickness}T#{seatedMatData["Thickness"]}"
+    componentDefinitionName = "DESSOUS_L#{@win_length}W#{@wall_thickness}T#{seatedMatData["Thickness"]}"
     componentInstanceName = "#{@poste_name}_Dessous"
 
     #Generate Instance
@@ -213,6 +202,100 @@ class PH::PreCadre
 
     #DRAW PSE ASSISE
     draw_pse_sat
+
+
+    #DRAW VR
+    if @vr
+      #Create Volets Container for Items
+      newGroup = @object.entities.add_group()
+      @objectPurgeEntities << newGroup.entities.add_cpoint(Geom::Point3d.new)
+      newGroup.name = "Volets"
+
+      #DRAW VOLET HORIZONTAL
+      ##Define Drawing Coords
+      coordsObj = {
+        "Y" => [@win_extDistance + @mat["Thickness"], @wall_thickness],
+        "Z" => [0, @mat["Thickness"]],
+        "X" => [0, 0]
+      }
+
+      ##Define Component Names
+      componentDefinitionName = "VOLETH_L#{@win_length+2*@offset}W#{@wall_thickness - @win_extDistance - @mat["Thickness"]}T#{@mat["Thickness"]}"
+      componentInstanceName = "#{@poste_name}_Volet Horizontal"
+
+      ##Generate Instance
+      itemComponentInstance = PH::SKP.drawOBJ(coordsObj, @win_length+2*@offset, argCIname:componentInstanceName, argCDname:componentDefinitionName, argContainer:newGroup)
+      PH::SKP.toOCL(itemComponentInstance, @matName)
+      itemComponentInstance.name = componentInstanceName
+
+      #DRAW VOLET VERTICAL
+      ##Define Drawing Coords
+      coordsObj = {
+        "Y" => [@win_extDistance, @win_extDistance + @mat["Thickness"]],
+        "Z" => [0, 188],
+        "X" => [0, 0]
+      }
+
+      ##Define Component Names
+      componentDefinitionName = "VOLETV_L#{@win_length+2*@offset}H#{188}T#{@mat["Thickness"]}"
+      componentInstanceName = "#{@poste_name}_Volet Vertical"
+
+      ##Generate Instance
+      itemComponentInstance = PH::SKP.drawOBJ(coordsObj, @win_length+2*@offset, argCIname:componentInstanceName, argCDname:componentDefinitionName, argContainer:newGroup)
+      PH::SKP.toOCL(itemComponentInstance, @matName)
+      itemComponentInstance.name = componentInstanceName
+
+      #Move Volets to position
+      transformation = Geom::Transformation.new([0, 0, (45+@win_height+@offset+seatedMatData["Thickness"]).mm])
+      newGroup.move!(transformation)
+
+      #DRAW SUR-HAUTEUR
+      unless @win_overHeight == 0
+        #Create Sur-Hauteur Container for Items
+        newGroup = @object.entities.add_group()
+        @objectPurgeEntities << newGroup.entities.add_cpoint(Geom::Point3d.new)
+        newGroup.name = "Volets Sur-Hauteur"
+
+        #DRAW SUR-HAUTEUR HORIZONTAL
+        ##Define Drawing Coords
+        coordsObj = {
+          "Y" => [0, @win_extDistance + @mat["Thickness"]],
+          "Z" => [0, seatedMatData["Thickness"]],
+          "X" => [0, 0]
+        }
+
+        ##Define Component Names
+        componentDefinitionName = "VOLET-OH-H_L#{@win_length+2*@offset}W#{@win_extDistance + @mat["Thickness"]}T#{seatedMatData["Thickness"]}"
+        componentInstanceName = "#{@poste_name}_Sur-Hauteur Horizontale"
+
+        ##Generate Instance
+        itemComponentInstance = PH::SKP.drawOBJ(coordsObj, @win_length+2*@offset, argCIname:componentInstanceName, argCDname:componentDefinitionName, argContainer:newGroup)
+        PH::SKP.toOCL(itemComponentInstance, "SupportT10")
+        itemComponentInstance.name = componentInstanceName
+
+        #DRAW VOLET VERTICAL
+        ##Define Drawing Coords
+        coordsObj = {
+          "Y" => [0, @mat["Thickness"]],
+          "Z" => [seatedMatData["Thickness"], @win_overHeight],
+          "X" => [0, 0]
+        }
+
+        ##Define Component Names
+        componentDefinitionName = "VOLET-OH-V_L#{@win_length+2*@offset}H#{@win_overHeight-seatedMatData["Thickness"]}T#{@mat["Thickness"]}"
+        componentInstanceName = "#{@poste_name}_Sur-Hauteur Verticale"
+
+        ##Generate Instance
+        itemComponentInstance = PH::SKP.drawOBJ(coordsObj, @win_length+2*@offset, argCIname:componentInstanceName, argCDname:componentDefinitionName, argContainer:newGroup)
+        PH::SKP.toOCL(itemComponentInstance, @matName)
+        itemComponentInstance.name = componentInstanceName
+
+        #Move Sur-Hauteur to position
+        transformation = Geom::Transformation.new([0, 0, (45+@win_height+@offset+seatedMatData["Thickness"]+190).mm])
+        newGroup.move!(transformation)
+        newGroup.explode
+      end
+    end
 
     #CLEAN/DELETE SECURITY ENTITIES
     @objectPurgeEntities.each {|entityToDelete| entityToDelete.erase! unless entityToDelete.deleted?}
