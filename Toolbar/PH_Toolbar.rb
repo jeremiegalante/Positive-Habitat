@@ -1,5 +1,5 @@
 '''
-load "E:/#GITHUB/PH/PH/Toolbar/PH_Toolbar.rb"
+load "E:/#GITHUB/PH/Toolbar/PH_Toolbar.rb"
 '''
 
 #Load Sketchup Requires
