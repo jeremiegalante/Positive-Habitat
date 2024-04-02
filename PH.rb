@@ -157,11 +157,13 @@ module PH
       #Set material
       argComponentInstance.material = PH::SKP.getShader(argOCLshaderName)
 
+      '''
       #Set Definition end Instance Names
       componentDefinition = argComponentInstance.definition
 
       #Reinitialise Instance Names
       argComponentInstance.name = ""
+      '''
     end
 
     '''

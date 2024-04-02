@@ -20,7 +20,7 @@ toolbarPH = UI::Toolbar.new("Frame") {
 #Generate Pré-Cadre drawing query
 cmd = UI::Command.new("Draw") {
   #Request the Frame Nomenclature
-  ids = ["ID", "WT", "MATO", "MATF", "FL", "FH", "FSH", "FC", "FD", "FE", "VR", "CS"]
+  ids = ["ID", "WT", "MATO", "MATF", "FL", "FH", "FSH", "FC", "FD", "FE", "oVR", "oCS", "oBA", "oRJ"]
   prompts = ["NUM POSTE [#{ids[0]}]",
              "MUR_Epaisseur [#{ids[1]}]",
              "MATIÈRE_Ossature [#{ids[2]}]",
@@ -32,8 +32,10 @@ cmd = UI::Command.new("Draw") {
              "FENÊTRE_Distance Mur Extérieur [#{ids[8]}]",
              "FENÊTRE_Epaisseur [#{ids[9]}]",
              "OPTION_Coffre Vollet [#{ids[10]}]",
-             "OPTION_Châpeau Supérieur [#{ids[11]}]"]
-  defaults = ["0", "400", "TreplisT19","", "3000", "2000", "0", "5", "200", "78", "X", "X"]
+             "OPTION_Châpeau Supérieur [#{ids[11]}]",
+             "OPTION_Bois/Alu [#{ids[12]}]",
+             "OPTION_Avancée Renfort Joues [#{ids[13]}]"]
+  defaults = ["0", "400", "TreplisT19","", "3000", "2000", "0", "5", "200", "78", "X", "X", "X", "54"]
   answersArray = UI.inputbox(prompts, defaults, "Paramètres du PréCadre.")
 
   #Convert to hash answers

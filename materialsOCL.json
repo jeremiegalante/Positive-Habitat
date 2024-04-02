@@ -7,6 +7,10 @@
     "OCL_RGBA":[30,255,128,1],
     "Thickness": 19
   },
+  "PliDouglasT19": {
+    "OCL_RGBA":[255,128,0,1],
+    "Thickness": 19
+  },
   "SupportT10": {
     "OCL_RGBA":[255,100,255,1],
     "Thickness": 10
