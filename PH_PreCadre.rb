@@ -3,73 +3,44 @@ require 'json'
 
 #Load PH Requires
 require_relative 'PH'
+require_relative 'patch/core/hash'
 
 class PH::PreCadre
   #DRAWING DATA
-  @@baseCoord = [0,0,0]
   @@currentCoord = [0,0,0]
+  @@frames = {}
 
   #Pré_Cadre SKP Object
   @object = nil
   @objectPurgeEntities = []
 
-  #Pré-Cadre IDs
-  @poste_id =nil
-  @poste_name = nil
-  @skp_object = nil
-
   #INSTANCE VARIABLE
-  @nomenclature = nil
-
-  #Dimensions
-  @wall_thickness = nil
-  @win_length = nil
-  @win_height = nil
-  @win_overHeight = nil
-  @offset = nil
-
-  #Options
-  @vr = false
-  @cup_hat = false
-  @ba = false
-  @rj = 0 #Option Fenêtre Bois/Alu
-
-  #Finish material
-  @matName = nil
-  @mat = nil
-  @matFinName = nil
-  @matFin = nil
+  @data
 
 
   #CONSTRUCTOR
-  def initialize(argNomenclature)
+  def initialize(argNomenclature={})
     raise "argNomenclature is not type of Hash" unless argNomenclature.is_a? Hash
 
-    #Set Poste attributes
-    @nomenclature = argNomenclature
-    @nomenclature.each_pair do |nom_key, nom_value|
-      case nom_key
-        when "ID"; @poste_id = nom_value.to_i, @poste_name = "POSTE #{nom_value}"
-        when "WT"; @wall_thickness = nom_value.to_i
-        when "MATO"; @matName=nom_value; @mat = PH::CFG.getOCLmaterialData(nom_value)
-        when "MATF"; @matFinName=nom_value; @matFin = PH::CFG.getOCLmaterialData(nom_value)
-        when "FL"; @win_length = nom_value.to_i
-        when "FH"; @win_height = nom_value.to_i
-        when "FSH"; @win_overHeight = nom_value.to_i
-        when "FC"; @offset = nom_value.to_i
-        when "FD"; @win_extDistance = nom_value.to_i
-        when "FE"; @pc_thickness = nom_value.to_i
-        when "oVR"; @vr = nom_value == "" ? false : true
-        when "oCS"; @cup_hat = nom_value == "" ? false : true
-        when "oBA"; @ba = nom_value == "" ? false : true
-        when "oRJ"; @rj = nom_value.to_i
-      end
-    end
 
-    #Generate Windows Poste Container
+    #Create the data a default data hash values
+    @data = argNomenclature
+
+    #Add a new frame and set the requested position
+    posteID = "#{@data["ID"]}"
+    @@frames.key?("#{@data["ID"]}") ? @@frames[posteID] += 1 : @@frames[posteID] = 1
+
+    #Update the current coord
+    ##Update the poste position
+    @@currentCoord[0] = @data["ID"]-1 * 3000
+
+    ##Update the frame position
+    @@currentCoord[1] = @@frames[posteID] * 1000
+
+    #Generate Frame container
     @object = Sketchup.active_model.active_entities.add_group
+    @object.name = "POSTE #{@data["ID"]}"
     @objectPurgeEntities = [@object.entities.add_cpoint(Geom::Point3d.new)]
-    @object.name = @poste_name
   end
 
 
@@ -82,22 +53,26 @@ class PH::PreCadre
     draw_precadre
 
     #DRAW STUDS
-    draw_side_joues
+    #draw_side_joues
 
     #DRAW DESSOUS
-    draw_dessous
+    #draw_dessous
 
     #DRAW PSE ASSISE
-    draw_pse_sat
+    #draw_pse_sat
 
     #DRAW VR
-    draw_VR if @vr
+    #draw_VR if @vr
 
     #DRAW FENÊTRE/BOIS
-    draw_joues_reinforcement("PliDouglasT19") if @rj != 0
+    #draw_joues_reinforcement("PliDouglasT19") if @rj != 0
 
     #CLEAN/DELETE SECURITY ENTITIES
     @objectPurgeEntities.each {|entityToDelete| entityToDelete.erase! unless entityToDelete.deleted?}
+
+    #MOVE AT THE RIGHT POSITION
+    moveTo = Geom::Transformation.new(@@currentCoord)
+    @object.move!(moveTo)
 
     #FINALISE OPERATION
     commit_result = Sketchup.active_model.commit_operation
@@ -113,47 +88,45 @@ class PH::PreCadre
   def draw_precadre
     #Define Face drawing coords
     coordsObjH = {
-      "X" => [0, @win_length],
-      "Y" => [0, @pc_thickness],
+      "X" => [0, @data["FRAME"]["L"]],
+      "Y" => [0, @data["FRAME"]["T"]],
       "Z" => [0, 0]
     }
 
     coordsObjV = {
-      "X" => [0, @pc_thickness],
-      "Y" => [0, @pc_thickness],
+      "X" => [0, @data["FRAME"]["T"]],
+      "Y" => [0, @data["FRAME"]["T"]],
       "Z" => [0, 0]
     }
 
-    #Define Component Names
-    componentDefinitionHname = "CF_HB_L#{@win_length}T#{@pc_thickness}H#{@pc_thickness}"
-    componentDefinitionVheight = @win_height - 2 * @pc_thickness
-    componentDefinitionVname = "CF_VB_L#{@pc_thickness}T#{@pc_thickness}H#{componentDefinitionVheight}"
-    componentInstanceName = "#{@poste_name}_Cadre Fenêtre"
+    #Define Component Names an instances list
+    componentDefinitionName = "P#{@data["ID"]}|FRAME PSE_"
+    itemComponentInstances = []
 
     #Create Pré-Cadre Container for Items
     newGroup = @object.entities.add_group()
     @objectPurgeEntities << newGroup.entities.add_cpoint(Geom::Point3d.new)
-    newGroup.name = "Cadre Fenêtre"
+    newGroup.name = "Pré-Cadre Fenêtre"
 
     #Generate Items
+    frameV_height = @data["FRAME"]["H"] - 2 * (@data["FRAME"]["T"] + @data["FRAME"]["OFF"])
     dessousPSEheight = 45 + PH::CFG.getOCLmaterialData("SupportT10")["Thickness"]
-    itemComponentInstances = []
 
     #Generate Bottom Instance
-    itemComponentInstances << PH::SKP.drawOBJ(coordsObjH, -@pc_thickness, argCIname:"#{componentInstanceName} Bas", argCDname:componentDefinitionHname, argCIpos:[@offset, @win_extDistance, dessousPSEheight], argContainer:newGroup)
+    itemComponentInstances << PH::SKP.drawOBJ(coordsObjH, -@data["FRAME"]["T"], argCDname:"#{componentDefinitionName}Bottom", argCIpos:[@data["FRAME"]["OFF"], @data["WALL"]["FD"], dessousPSEheight], argContainer:newGroup)
 
     #Generate Top Instance
-    itemComponentInstances << PH::SKP.drawOBJ(coordsObjH, -@pc_thickness, argCIname:"#{componentInstanceName} Haut", argCDname:componentDefinitionHname, argCIpos:[@offset, @win_extDistance, dessousPSEheight+@win_height-@pc_thickness], argContainer:newGroup)
+    itemComponentInstances << PH::SKP.drawOBJ(coordsObjH, -@data["FRAME"]["T"], argCDname:"#{componentDefinitionName}Top", argCIpos:[@data["FRAME"]["OFF"], @data["WALL"]["FD"], dessousPSEheight+@win_height-@pc_thickness], argContainer:newGroup)
 
     #Generate Left Instance
-    itemComponentInstances << PH::SKP.drawOBJ(coordsObjV, -componentDefinitionVheight, argCIname:"#{componentInstanceName} Gauche", argCDname:componentDefinitionVname, argCIpos:[@offset, @win_extDistance, dessousPSEheight+@pc_thickness], argContainer:newGroup)
+    itemComponentInstances << PH::SKP.drawOBJ(coordsObjV, frameV_height, argCDname:"#{componentDefinitionName}Left", argCIpos:[@data["OFF"], @data["WALL"]["FD"], dessousPSEheight+@data["FRAME"]["T"]], argContainer:newGroup)
 
     #Generate Right Instance
-    itemComponentInstances << PH::SKP.drawOBJ(coordsObjV, -componentDefinitionVheight, argCIname:"#{componentInstanceName} Droit", argCDname:componentDefinitionVname, argCIpos:[@offset+@win_length-@pc_thickness, @win_extDistance, dessousPSEheight+@pc_thickness], argContainer:newGroup)
+    itemComponentInstances << PH::SKP.drawOBJ(coordsObjV, frameV_height, argCDname:"#{componentDefinitionName}Right", argCIpos:[@data["OFF"]+@data["FRAME"]["L"]-@data["FRAME"]["T"], @data["WALL"]["FD"], dessousPSEheight+@data["FRAME"]["T"]], argContainer:newGroup)
 
     #Apply OCL material
     itemComponentInstances.each do |currentCI|
-      currentCI.material = PH::SKP.getShader("PreCadre")
+      currentCI.material = PH::SKP.getShader("Frame")
     end
 
     return itemComponentInstances
@@ -175,17 +148,16 @@ class PH::PreCadre
     montantHeight = @win_height + @win_overHeight + 55 + (@cup_hat ? PH::CFG.getOCLmaterialData("SupportT10")["Thickness"] + @offset : 0) + (@vr ? 188 : 0)
 
     ##Define Component Names
-    componentDefinitionName = "MONTANT_W#{@wall_thickness}T#{@mat["Thickness"]}H#{montantHeight}"
-    componentInstanceName = "#{@poste_name}_Montant"
+    componentDefinitionName = "FRAME PSE_"
 
     ##Generate Items
     itemComponentInstances = []
 
     ##Generate Left Instance
-    itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -montantHeight, argCDname:componentDefinitionName, argCIname:"#{componentInstanceName} Gauche", argCIpos:[-(@mat["Thickness"]), 0, 0], argContainer:@object)
+    itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -montantHeight, argCDname:"#{componentDefinitionName}Left", argCIpos:[-(@mat["Thickness"]), 0, 0], argContainer:@object)
 
     ##Generate Right Instance
-    itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -montantHeight, argCDname:componentDefinitionName, argCIname:"#{componentInstanceName} Droit", argCIpos:[@win_length+2*@offset, 0, 0], argContainer:@object)
+    itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -montantHeight, argCDname:"#{componentDefinitionName}Right", argCIpos:[@win_length+2*@offset, 0, 0], argContainer:@object)
 
     ##Rename and convert to OCL
     itemComponentInstances.each do |currentCI|
