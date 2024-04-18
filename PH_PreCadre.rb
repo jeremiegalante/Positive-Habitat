@@ -41,6 +41,22 @@ class PH::PreCadre
     @object = Sketchup.active_model.active_entities.add_group
     @object.name = "POSTE #{@data["ID"]}"
     @objectPurgeEntities = [@object.entities.add_cpoint(Geom::Point3d.new)]
+
+    #Get Material data
+    @mat = {}
+
+    ##Get Mat OSS data
+    @matOSS_Name = @data["MAT"]["OSS"]
+    @mat[@matOSS_Name] = PH::CFG.getOCLmaterialData(@matOSS_Name)
+
+    ##Get Mat FIN data
+    @matFIN_Name = @data["MAT"]["FIN"]
+    @mat[@matFIN_Name] = PH::CFG.getOCLmaterialData(@matFIN_Name) if @matFIN_Name != ""
+
+    #Set option status
+    ["VR", "CS", "BA"].each do |option|
+      @data[option] = (@data[option] == "X")
+    end
   end
 
 
@@ -53,26 +69,28 @@ class PH::PreCadre
     draw_precadre
 
     #DRAW STUDS
-    #draw_side_joues
+    draw_side_studs
 
     #DRAW DESSOUS
-    #draw_dessous
+    draw_dessous
 
     #DRAW PSE ASSISE
-    #draw_pse_sat
+    draw_pse_sat
 
     #DRAW VR
-    #draw_VR if @vr
+    draw_VR if @data["VR"]
 
     #DRAW FENÊTRE/BOIS
-    #draw_joues_reinforcement("PliDouglasT19") if @rj != 0
+    draw_joues_reinforcement("PliDouglasT19") if @data["RS"] != 0
 
     #CLEAN/DELETE SECURITY ENTITIES
     @objectPurgeEntities.each {|entityToDelete| entityToDelete.erase! unless entityToDelete.deleted?}
 
     #MOVE AT THE RIGHT POSITION
+    '''
     moveTo = Geom::Transformation.new(@@currentCoord)
     @object.move!(moveTo)
+    '''
 
     #FINALISE OPERATION
     commit_result = Sketchup.active_model.commit_operation
@@ -83,7 +101,7 @@ class PH::PreCadre
   # @return [Array<Sketchup::ComponentInstance>] the OCL 'Pré-Cadre' component instances generated.
   # @!scope instance
   # @!group Drawing Methods
-  # @version 0.5.0
+  # @version
   # @since 0.5.0
   def draw_precadre
     #Define Face drawing coords
@@ -116,13 +134,13 @@ class PH::PreCadre
     itemComponentInstances << PH::SKP.drawOBJ(coordsObjH, -@data["FRAME"]["T"], argCDname:"#{componentDefinitionName}Bottom", argCIpos:[@data["FRAME"]["OFF"], @data["WALL"]["FD"], dessousPSEheight], argContainer:newGroup)
 
     #Generate Top Instance
-    itemComponentInstances << PH::SKP.drawOBJ(coordsObjH, -@data["FRAME"]["T"], argCDname:"#{componentDefinitionName}Top", argCIpos:[@data["FRAME"]["OFF"], @data["WALL"]["FD"], dessousPSEheight+@win_height-@pc_thickness], argContainer:newGroup)
+    itemComponentInstances << PH::SKP.drawOBJ(coordsObjH, -@data["FRAME"]["T"], argCDname:"#{componentDefinitionName}Top", argCIpos:[@data["FRAME"]["OFF"], @data["WALL"]["FD"], dessousPSEheight+@data["FRAME"]["H"]-@data["FRAME"]["T"]], argContainer:newGroup)
 
     #Generate Left Instance
-    itemComponentInstances << PH::SKP.drawOBJ(coordsObjV, frameV_height, argCDname:"#{componentDefinitionName}Left", argCIpos:[@data["OFF"], @data["WALL"]["FD"], dessousPSEheight+@data["FRAME"]["T"]], argContainer:newGroup)
+    itemComponentInstances << PH::SKP.drawOBJ(coordsObjV, -frameV_height, argCDname:"#{componentDefinitionName}Left", argCIpos:[@data["FRAME"]["OFF"], @data["WALL"]["FD"], dessousPSEheight+@data["FRAME"]["T"]], argContainer:newGroup)
 
     #Generate Right Instance
-    itemComponentInstances << PH::SKP.drawOBJ(coordsObjV, frameV_height, argCDname:"#{componentDefinitionName}Right", argCIpos:[@data["OFF"]+@data["FRAME"]["L"]-@data["FRAME"]["T"], @data["WALL"]["FD"], dessousPSEheight+@data["FRAME"]["T"]], argContainer:newGroup)
+    itemComponentInstances << PH::SKP.drawOBJ(coordsObjV, -frameV_height, argCDname:"#{componentDefinitionName}Right", argCIpos:[@data["FRAME"]["OFF"]+@data["FRAME"]["L"]-@data["FRAME"]["T"], @data["WALL"]["FD"], dessousPSEheight+@data["FRAME"]["T"]], argContainer:newGroup)
 
     #Apply OCL material
     itemComponentInstances.each do |currentCI|
@@ -132,20 +150,21 @@ class PH::PreCadre
     return itemComponentInstances
   end
 
-  # Method to draw Joues latérales.
-  # @return [Array<Sketchup::ComponentInstance>] the OCL 'Joues' component instances generated.
+  # Method to draw lateral studs.
+  # @return [Array<Sketchup::ComponentInstance>] the OCL 'Montant' component instances generated.
   # @!scope instance
   # @!group Drawing Methods
-  # @version 0.5.0
+  # @version
   # @since 0.5.0
-  def draw_side_joues
+  def draw_side_studs
     #Define Drawing Coords
     coordsObj = {
-      "X" => [0, @mat["Thickness"]],
-      "Y" => [0, @wall_thickness],
+      "X" => [0, @mat[@matOSS_Name]["Thickness"]],
+      "Y" => [0, @data["WALL"]["T"]],
       "Z" => [0, 0]
     }
-    montantHeight = @win_height + @win_overHeight + 55 + (@cup_hat ? PH::CFG.getOCLmaterialData("SupportT10")["Thickness"] + @offset : 0) + (@vr ? 188 : 0)
+    cs_height = PH::CFG.getOCLmaterialData("SupportT10")["Thickness"]
+    montantHeight = @data["FRAME"]["H"] + @data["OH"]["H"] + 55 + (@data["CS"] ? cs_height + @data["FRAME"]["OFF"] : 0) + (@data["VR"] ? 188 : 0)
 
     ##Define Component Names
     componentDefinitionName = "FRAME PSE_"
@@ -154,23 +173,24 @@ class PH::PreCadre
     itemComponentInstances = []
 
     ##Generate Left Instance
-    itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -montantHeight, argCDname:"#{componentDefinitionName}Left", argCIpos:[-(@mat["Thickness"]), 0, 0], argContainer:@object)
+    itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -montantHeight, argCDname:"#{componentDefinitionName}Left", argCIpos:[-@mat[@matOSS_Name]["Thickness"], 0, 0], argContainer:@object)
 
     ##Generate Right Instance
-    itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -montantHeight, argCDname:"#{componentDefinitionName}Right", argCIpos:[@win_length+2*@offset, 0, 0], argContainer:@object)
+    itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -montantHeight, argCDname:"#{componentDefinitionName}Right", argCIpos:[@data["FRAME"]["L"]+2*@data["FRAME"]["OFF"], 0, 0], argContainer:@object)
 
     ##Rename and convert to OCL
     itemComponentInstances.each do |currentCI|
-      currentCI.material = PH::SKP.getShader(@matName)
+      currentCI.material = PH::SKP.getShader(@matOSS_Name)
     end
 
     #Generate Châpeau if requested
-    if @cup_hat
+    if @data["CS"]
       #Define Drawing Coords
-      cupHatLength = @win_length + 2*@offset + 2*@mat["Thickness"]
+      cs_height = PH::CFG.getOCLmaterialData("SupportT10")["Thickness"]
+      cupHatLength = @data["FRAME"]["L"] + 2*@data["FRAME"]["OFF"] + 2* @mat[@matOSS_Name]["Thickness"]
       cupHatLengthThickness = PH::CFG.getOCLmaterialData("SupportT10")["Thickness"]
       coordsObj = {
-        "Y" => [0, @wall_thickness],
+        "Y" => [0, @data["WALL"]["T"]],
         "Z" => [0, cupHatLengthThickness],
         "X" => [0, 0]
       }
@@ -180,7 +200,7 @@ class PH::PreCadre
       componentInstanceName = "#{@poste_name}_Chapeau"
 
       #Generate Instance
-      itemComponentInstance = PH::SKP.drawOBJ(coordsObj, cupHatLength, argCIname:componentInstanceName, argCDname:componentDefinitionName, argCIpos:[-(@mat["Thickness"]), 0, montantHeight], argContainer:@object)
+      itemComponentInstance = PH::SKP.drawOBJ(coordsObj, cupHatLength, argCIname:componentInstanceName, argCDname:componentDefinitionName, argCIpos:[-@mat[@matOSS_Name]["Thickness"], 0, montantHeight], argContainer:@object)
       itemComponentInstance.material = PH::SKP.getShader("SupportT10")
     end
 
@@ -191,7 +211,7 @@ class PH::PreCadre
   # @return [Sketchup::ComponentInstance] the OCL 'Dessous' component instance generated.
   # @!scope instance
   # @!group Drawing Methods
-  # @version 0.5.0
+  # @version
   # @since 0.5.0
   def draw_dessous
     #Get Seated Material Height
@@ -199,17 +219,17 @@ class PH::PreCadre
 
     #Define Drawing Coords
     coordsObj = {
-      "Y" => [0, @wall_thickness],
+      "Y" => [0, @data["WALL"]["T"]],
       "Z" => [0, seatedMatData["Thickness"]],
       "X" => [0, 0]
     }
 
     #Define Component Names
-    componentDefinitionName = "DESSOUS_L#{@win_length}W#{@wall_thickness}T#{seatedMatData["Thickness"]}"
+    componentDefinitionName = "DESSOUS_L#{@data["FRAME"]["L"]}W#{@data["FRAME"]["T"]}T#{seatedMatData["Thickness"]}"
     componentInstanceName = "#{@poste_name}_Dessous"
 
     #Generate Instance
-    componentInstance = PH::SKP.drawOBJ(coordsObj, @win_length+2*@offset, argCIname:componentInstanceName, argCDname:componentDefinitionName, argContainer:@object)
+    componentInstance = PH::SKP.drawOBJ(coordsObj, @data["FRAME"]["L"]+2*@data["FRAME"]["OFF"], argCIname:componentInstanceName, argCDname:componentDefinitionName, argContainer:@object)
     componentInstance.material = PH::SKP.getShader("SupportT10")
 
     return componentInstance
@@ -223,9 +243,9 @@ class PH::PreCadre
   # @return [Sketchup::ComponentInstance] the OCL PSE element component instance generated.
   # @!scope instance
   # @!group Drawing Methods
-  # @version 0.5.0
+  # @version
   # @since 0.4.0
-  def draw_pse_sat(argWidth:@win_extDistance+@pc_thickness, argSteepLength:@win_extDistance, argWindowThickness:@pc_thickness, argHeights:[3,23,45])
+  def draw_pse_sat(argWidth:@data["WALL"]["FD"]+@data["FRAME"]["T"], argSteepLength:@data["WALL"]["FD"], argWindowThickness:@data["FRAME"]["T"], argHeights:[3,23,45])
     raise "argWidth is not type of Numeric" unless argWidth.is_a? Numeric
     raise "argSteepLength is not type of Numeric" unless argSteepLength.is_a? Numeric
     raise "argWindowThickness is not type of Numeric" unless argWindowThickness.is_a? Numeric
@@ -233,9 +253,15 @@ class PH::PreCadre
     raise "argHeights is not Numerics Array[3]" unless argHeights[0].is_a? Numeric and argHeights[1].is_a? Numeric and argHeights[2].is_a? Numeric
 
     #Extract Component Definition from name
-    ocl_CDname = "ASSISE PSE_L#{@win_length}T#{argSteepLength}"
+    #Define Length
+
+
+    #Define Component Names
+    ocl_Cname = "XPS PX"
+    ocl_CDname = "#{ocl_Cname}#{@data["FRAME"]["L"]}"
+    #ocl_CDname = "ASSISE PSE_L#{@win_length}T#{argSteepLength}"
     ocl_componentDefinition = Sketchup.active_model.definitions[ocl_CDname]
-    ocl_CIname = "#{@poste_name}_Assise PSE"
+    ocl_CIname = "POSTE#{@data["ID"]}_#{ocl_Cname}"
 
     #Create item from data
     ocl_componentInstance = nil
@@ -256,7 +282,7 @@ class PH::PreCadre
       newGroup = @object.entities.add_group
       newFace = newGroup.entities.add_face(face_coords)
       newFace.reverse!
-      newFace.pushpull((@win_length + 2*@offset).mm)
+      newFace.pushpull((@data["FRAME"]["L"]+2*@data["FRAME"]["OFF"]).mm)
 
       #Transform to OCL Element
       ocl_componentInstance = newGroup.to_component
@@ -287,7 +313,7 @@ class PH::PreCadre
   # @return [Sketchup::ComponentInstance] the OCL PSE element component instance generated.
   # @!scope instance
   # @!group Drawing Methods
-  # @version 0.5.0
+  # @version
   # @since 0.5.0
   def draw_VR
     #Create Volets Container for Items
@@ -304,37 +330,37 @@ class PH::PreCadre
     #DRAW VOLET HORIZONTAL
     ##Define Drawing Coords
     coordsObj = {
-      "Y" => [@win_extDistance + @mat["Thickness"], @wall_thickness],
-      "Z" => [0, @mat["Thickness"]],
+      "Y" => [@data["WALL"]["FD"] + @mat[@matOSS_Name]["Thickness"], @data["WALL"]["T"]],
+      "Z" => [0, @mat[@matOSS_Name]["Thickness"]],
       "X" => [0, 0]
     }
 
     ##Define Component Names
-    componentDefinitionName = "VOLETH_L#{@win_length+2*@offset}W#{@wall_thickness - @win_extDistance - @mat["Thickness"]}T#{@mat["Thickness"]}"
-    componentInstanceName = "#{@poste_name}_Volet Horizontal"
+    componentDefinitionName = "VOLETH_L#{@data["FRAME"]["L"]+2*@data["FRAME"]["OFF"]}W#{@data["WALL"]["T"] - @data["WALL"]["FD"] - @mat[@matOSS_Name]["Thickness"]}T#{@mat[@matOSS_Name]["Thickness"]}"
+    componentInstanceName = "POSTE#{@data["ID"]}_Volet Horizontal"
 
     ##Generate Instance
-    itemComponentInstances << PH::SKP.drawOBJ(coordsObj, @win_length+2*@offset, argCIname:componentInstanceName, argCDname:componentDefinitionName, argContainer:newGroup)
-    itemComponentInstances[-1].material = PH::SKP.getShader(@matName)
+    itemComponentInstances << PH::SKP.drawOBJ(coordsObj, @data["FRAME"]["L"]+2*@data["FRAME"]["OFF"], argCIname:componentInstanceName, argCDname:componentDefinitionName, argContainer:newGroup)
+    itemComponentInstances[-1].material = PH::SKP.getShader(@matOSS_Name)
 
     #DRAW VOLET VERTICAL
     ##Define Drawing Coords
     coordsObj = {
-      "Y" => [@win_extDistance, @win_extDistance + @mat["Thickness"]],
+      "Y" => [@data["WALL"]["FD"], @data["WALL"]["FD"] + @mat[@matOSS_Name]["Thickness"]],
       "Z" => [0, 188],
       "X" => [0, 0]
     }
 
     ##Define Component Names
-    componentDefinitionName = "VOLETV_L#{@win_length+2*@offset}H#{188}T#{@mat["Thickness"]}"
-    componentInstanceName = "#{@poste_name}_Volet Vertical"
+    componentDefinitionName = "VOLETV_L#{@data["FRAME"]["L"]+2*@data["FRAME"]["OFF"]}H#{188}T#{@mat[@matOSS_Name]["Thickness"]}"
+    componentInstanceName = "POSTE#{@data["ID"]}_Volet Vertical"
 
     ##Generate Instance
-    itemComponentInstances << PH::SKP.drawOBJ(coordsObj, @win_length+2*@offset, argCIname:componentInstanceName, argCDname:componentDefinitionName, argContainer:newGroup)
-    itemComponentInstances[-1].material = PH::SKP.getShader(@matName)
+    itemComponentInstances << PH::SKP.drawOBJ(coordsObj, @data["FRAME"]["L"]+2*@data["FRAME"]["OFF"], argCIname:componentInstanceName, argCDname:componentDefinitionName, argContainer:newGroup)
+    itemComponentInstances[-1].material = PH::SKP.getShader(@matOSS_Name)
 
     #Move Volets to position
-    transformation = Geom::Transformation.new([0, 0, (45+@win_height+@offset+seatedMatData["Thickness"]).mm])
+    transformation = Geom::Transformation.new([0, 0, (45+@data["FRAME"]["H"]+@data["FRAME"]["OFF"]+seatedMatData["Thickness"]).mm])
     newGroup.move!(transformation)
 
     #DRAW SUR-HAUTEUR
@@ -347,37 +373,37 @@ class PH::PreCadre
       #DRAW SUR-HAUTEUR HORIZONTAL
       ##Define Drawing Coords
       coordsObj = {
-        "Y" => [0, @win_extDistance + @mat["Thickness"]],
+        "Y" => [0, @data["WALL"]["FD"] + @mat[@matOSS_Name]["Thickness"]],
         "Z" => [0, seatedMatData["Thickness"]],
         "X" => [0, 0]
       }
 
       ##Define Component Names
-      componentDefinitionName = "VOLET-OH-H_L#{@win_length+2*@offset}W#{@win_extDistance + @mat["Thickness"]}T#{seatedMatData["Thickness"]}"
-      componentInstanceName = "#{@poste_name}_Sur-Hauteur Horizontale"
+      componentDefinitionName = "VOLET-OH-H_L#{@data["FRAME"]["L"]+2*@data["FRAME"]["OFF"]}W#{@data["WALL"]["FD"] + @mat[@matOSS_Name]["Thickness"]}T#{seatedMatData["Thickness"]}"
+      componentInstanceName = "POSTE#{@data["ID"]}_Sur-Hauteur Horizontale"
 
       ##Generate Instance
-      itemComponentInstances << PH::SKP.drawOBJ(coordsObj, @win_length+2*@offset, argCIname:componentInstanceName, argCDname:componentDefinitionName, argContainer:newGroup)
+      itemComponentInstances << PH::SKP.drawOBJ(coordsObj, @data["FRAME"]["L"]+2*@data["FRAME"]["OFF"], argCIname:componentInstanceName, argCDname:componentDefinitionName, argContainer:newGroup)
       itemComponentInstances[-1].material = PH::SKP.getShader("SupportT10")
 
       #DRAW VOLET VERTICAL
       ##Define Drawing Coords
       coordsObj = {
-        "Y" => [0, @mat["Thickness"]],
-        "Z" => [seatedMatData["Thickness"], @win_overHeight],
+        "Y" => [0, @mat[@matOSS_Name]["Thickness"]],
+        "Z" => [seatedMatData["Thickness"], @data["OH"]["H"]],
         "X" => [0, 0]
       }
 
       ##Define Component Names
-      componentDefinitionName = "VOLET-OH-V_L#{@win_length+2*@offset}H#{@win_overHeight-seatedMatData["Thickness"]}T#{@mat["Thickness"]}"
-      componentInstanceName = "#{@poste_name}_Sur-Hauteur Verticale"
+      componentDefinitionName = "VOLET-OH-V_L#{@data["FRAME"]["L"]+2*@data["FRAME"]["OFF"]}H#{@data["OH"]["H"]-seatedMatData["Thickness"]}T#{@mat[@matOSS_Name]["Thickness"]}"
+      componentInstanceName = "POSTE#{@data["ID"]}_Sur-Hauteur Verticale"
 
       ##Generate Instance
-      itemComponentInstances << PH::SKP.drawOBJ(coordsObj, @win_length+2*@offset, argCIname:componentInstanceName, argCDname:componentDefinitionName, argContainer:newGroup)
-      itemComponentInstances[-1].material = PH::SKP.getShader(@matName)
+      itemComponentInstances << PH::SKP.drawOBJ(coordsObj, @data["FRAME"]["L"]+2*@data["FRAME"]["OFF"], argCIname:componentInstanceName, argCDname:componentDefinitionName, argContainer:newGroup)
+      itemComponentInstances[-1].material = PH::SKP.getShader(@matOSS_Name)
 
       #Move Sur-Hauteur to position
-      transformation = Geom::Transformation.new([0, 0, (45+@win_height+@offset+seatedMatData["Thickness"]+190).mm])
+      transformation = Geom::Transformation.new([0, 0, (45+@data["FRAME"]["H"]+@data["FRAME"]["OFF"]+seatedMatData["Thickness"]+190).mm])
       newGroup.move!(transformation)
       newGroup.explode
     end
@@ -388,35 +414,35 @@ class PH::PreCadre
   # @return [Array<Sketchup::ComponentInstance>] the OCL component instances generated.
   # @!scope instance
   # @!group Drawing Methods
-  # @version 0.5.0
+  # @version
   # @since 0.5.0
-  def draw_joues_reinforcement(argMatrialName, argSteepLength:@win_extDistance, argHeights:[3,23,45])
+  def draw_joues_reinforcement(argMatrialName, argSteepLength:@data["WALL"]["FD"], argHeights:[3,23,45])
     raise "argMatrialName is not type of String" unless argMatrialName.is_a? String
     raise "argSteepLength is not type of Numeric" unless argSteepLength.is_a? Numeric
     raise "argHeights is not type of Array[3]" unless argHeights.class == Array and argHeights.length == 3
     raise "argHeights is not Numerics Array[3]" unless argHeights[0].is_a? Numeric and argHeights[1].is_a? Numeric and argHeights[2].is_a? Numeric
 
     #Define Drawing Coords
-    montantWidth = @win_extDistance + @rj - (@ba ? 20 : 0)
+    montantWidth = @data["WALL"]["FD"] + @data["RS"] - (@data["BA"] ? 20 : 0)
     montantThickness = PH::CFG.getOCLmaterialData(argMatrialName)["Thickness"]
-    montantHeight = @win_height + (@vr ? 188 : 0) + ((@cup_hat or @vr) ? 10 : 0) + 47
+    montantHeight = @data["FRAME"]["H"] + (@data["RS"] ? 188 : 0) + ((@data["CS"] or @data["VR"]) ? 10 : 0) + 47
     montantAltitude = argHeights[0]+PH::CFG.getOCLmaterialData("SupportT10")["Thickness"]
 
     #Extract Component Definition from name
-    ocl_CDname = "MONTANT REIN_W#{montantWidth}T#{montantThickness}H#{montantHeight}#{@ba ? "_+BA" : ""}"
+    ocl_CDname = "MONTANT REIN_W#{montantWidth}T#{montantThickness}H#{montantHeight}#{@data["BA"] ? "_+BA" : ""}"
     ocl_componentDefinition = Sketchup.active_model.definitions[ocl_CDname]
-    ocl_CIname = "#{@poste_name}_Montant Renforcé#{@ba ? " Bois/Alu" : ""}"
+    ocl_CIname = "#{@poste_name}_Montant Renforcé#{@data["BA"] ? " Bois/Alu" : ""}"
 
     #Create item from data
     ocl_componentInstance = nil
 
     if ocl_componentDefinition.nil?
       #Define face coordinates
-      face_coords = [[0, -@rj.mm, 0]]
+      face_coords = [[0, -@data["RS"].mm, 0]]
       face_coords << [0, 0, 0]
-      face_coords << [0, (montantWidth-@rj).mm, ((argHeights[1]-argHeights[0]) * (montantWidth-@rj) / argSteepLength).mm]
-      face_coords << [0, (montantWidth-@rj).mm, montantHeight.mm]
-      face_coords << [0, -@rj.mm, montantHeight.mm]
+      face_coords << [0, (montantWidth-@data["RS"]).mm, ((argHeights[1]-argHeights[0]) * (montantWidth-@data["RS"]) / argSteepLength).mm]
+      face_coords << [0, (montantWidth-@data["RS"]).mm, montantHeight.mm]
+      face_coords << [0, -@data["RS"].mm, montantHeight.mm]
 
 
       #Draw face and extrude it

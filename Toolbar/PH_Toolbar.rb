@@ -23,7 +23,8 @@ cmd = UI::Command.new("Draw") {
   ##ID Global
   idINFO = {"ID": "NUM POSTE [Integer]",
             "WALL|T": "Epaisseur du Mur [Decimal|400mm]",
-            "WALL|FD": "Distance face extérieure [Decimal|200mm]"}
+            "WALL|FD": "Distance face extérieure [Decimal|200mm]",
+            "WALL|RS": "Renfort de montants [Decimal|54mm]"}
 
   ##ID des Matériaux
   idMAT = {"MAT|OSS": "Matière Ossature [String|Nom]",
@@ -52,7 +53,7 @@ cmd = UI::Command.new("Draw") {
   #Request the Frame Nomenclature
   ids = idINFO.keys + idMAT.keys + idFRAME.keys + idVR.keys + idOH.keys + idOPTIONS.keys
   prompts = idINFO.values + idMAT.values + idFRAME.values + idVR.values + idOH.values + idOPTIONS.values
-  defaults = ["0", "400", "200", "TreplisT19", "", "3000", "2500", "50", "5", "200", "200", "160", "0", "3", "X", "X", "X"]
+  defaults = ["0", "400", "200", "54", "TreplisT19", "", "3000", "2500", "50", "5", "200", "200", "160", "0", "3", "X", "X", "X"]
   defaultAnswerArray = [rand(100..200).to_s, "400", "200", "TreplisT19", "", "", "", "", "5", "200", "200", "160", "0", "3", "", "", ""]
   answersArray = UI.inputbox(prompts, defaults, "Paramètres du Pré-Cadre.")
 
@@ -102,9 +103,8 @@ cmd = UI::Command.new("Draw") {
 
     #In case of nested param
     stepHash = createHirarchy(currentParam.split("|"), currentValue)
-    preCadreHash.merge!(stepHash)
+    preCadreHash.merge_recursively!(stepHash)
   end
-  puts preCadreHash
 
   #Generate Drawing
   pcPoste = PH::PreCadre.new(preCadreHash)
