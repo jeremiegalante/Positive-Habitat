@@ -3,7 +3,7 @@ require 'json'
 
 #Load PH Requires
 require_relative 'PH'
-require_relative 'patch/core/hash'
+require_relative 'patch/core/rb'
 
 class PH::PreCadre
   #DRAWING DATA

@@ -7,13 +7,13 @@ require "sketchup.rb"
 
 #Load PH Requires
 require_relative '../PH'
-require_relative "../PH_PreCadre"
+require_relative '../patch/hash'
+require_relative '../Frame'
 
 
 #PH TOOLBAR
 toolbarPH = UI::Toolbar.new("Frame") {
-  #Reload the Frame RB source file
-  load '../Frame.rb'
+
 }
 
 #PRE-CADRE COMMANDS
@@ -25,36 +25,43 @@ cmd = UI::Command.new("Draw") {
             "WALL|T": "Epaisseur du Mur [Decimal|400mm]",
             "WALL|FD": "Distance face extérieure [Decimal|200mm]",
             "WALL|RS": "Renfort de montants [Decimal|54mm]"}
+  defaultINFO = ["0", "400", "200", "54"]
 
   ##ID des Matériaux
   idMAT = {"MAT|OSS": "Matière Ossature [String|Nom]",
            "MAT|FIN": "Matière Finition"}
+  defaultMAT = ["TreplisT19", ""]
 
   ##ID du Pré-Cadre
   idFRAME = {"FRAME|L": "Longueur du Pré-Cadre [Decimal|mm]",
              "FRAME|H": "Hauteur du Pré-Cadre  [Decimal|mm]",
              "FRAME|T": "Epaisseur PSE du Pré-Cadre [Decimal|78mm]",
              "FRAME|OFF": "Espace du Jeu Compribande du Pré-Cadre [Decimal|5mm]"}
+  defaultFRAME = ["3000", "2500", "78", "5"]
 
   ##ID Volet Roulant
-  idVR = {"H":"Hauteur Volet Roulant [Decimal|200mm]", #
-          "VH":"Longueur Volet Horizontal [Decimal|200mm]", #
-          "VV":"Longueur Volet Vertical [Decimal|160mm]"}
+  idVR = {"VR|H":"Hauteur Volet Roulant [Decimal|180mm]", #
+          "VR|VH":"Longueur Volet Horizontal [Decimal|200mm]", #
+          "VR|VV":"Longueur Volet Vertical [Decimal|180mm]",
+          "VR|OFF":"Marge hauteur Volet Vertical sans Châpeau Supérieur [Decimal|3mm]"}
+  defaultVR = ["180", "200", "180", "3"]
 
   ##ID Sur-Hauteur
   idOH = {"OH|H":"Valeur Sur-Hauteur [Decimal|mm]",
           "OH|OFF":"Retrait Montants de la Sur-Hauteur [Decimal|3mm]"}
+  defaultOH = ["0", "3"]
 
   ##ID Options à activer
-  idOPTIONS = {"VR":"Activation Coffre Vollet [X]",
-               "CS":"Activation Châpeau Supérieur [X]",
-               "BA":"Activation Bois/Alu [X]"}
+  idOPTIONS = {"VR?":"Activation Coffre Vollet [X]",
+               "CS?":"Activation Châpeau Supérieur [X]",
+               "BA?":"Activation Bois/Alu [X]",
+               "BAS?": "Activation du Support en bas  [X]"}
+  defaultOPTIONS = ["X", "X", "X", "X"]
 
   #Request the Frame Nomenclature
   ids = idINFO.keys + idMAT.keys + idFRAME.keys + idVR.keys + idOH.keys + idOPTIONS.keys
   prompts = idINFO.values + idMAT.values + idFRAME.values + idVR.values + idOH.values + idOPTIONS.values
-  defaults = ["0", "400", "200", "54", "TreplisT19", "", "3000", "2500", "50", "5", "200", "200", "160", "0", "3", "X", "X", "X"]
-  defaultAnswerArray = [rand(100..200).to_s, "400", "200", "TreplisT19", "", "", "", "", "5", "200", "200", "160", "0", "3", "", "", ""]
+  defaults = defaultINFO + defaultMAT + defaultFRAME + defaultVR + defaultOH + defaultOPTIONS
   answersArray = UI.inputbox(prompts, defaults, "Paramètres du Pré-Cadre.")
 
   #Convert String values to Integer if possible
@@ -65,11 +72,13 @@ cmd = UI::Command.new("Draw") {
   #Merge answers with default values
   answersMerge = []
   answersArray.each_with_index do |currentVal, currentIndex|
-    answersMerge[currentIndex] = (currentVal != "") ? currentVal : defaultAnswerArray[currentIndex]
+    originalVal = currentVal
+    originalVal = defaults[currentIndex] if !ids[currentIndex].to_s.include?("?")
+    answersMerge[currentIndex] = (currentVal != "") ? currentVal : originalVal
   end
 
   #Split Hash into sections
-  def createHirarchy(argKeys, argValue)
+  def createHierarchy(argKeys, argValue)
     raise "argKeys is not type of Array" unless argKeys.is_a? Array
 
     hashResult = {}
@@ -102,12 +111,12 @@ cmd = UI::Command.new("Draw") {
     currentParam = currentParam.to_s if !currentParam.is_a? String
 
     #In case of nested param
-    stepHash = createHirarchy(currentParam.split("|"), currentValue)
+    stepHash = createHierarchy(currentParam.split("|"), currentValue)
     preCadreHash.merge_recursively!(stepHash)
   end
 
   #Generate Drawing
-  pcPoste = PH::PreCadre.new(preCadreHash)
+  pcPoste = PH::Frame.new(preCadreHash)
   pcPoste.draw
 }
 
