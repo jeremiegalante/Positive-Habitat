@@ -6,10 +6,10 @@ require_relative 'PH'
 require_relative 'patch/hash'
 
 class PH::Frame
-  #DRAWING DATA
-  @@nextCoord = [0,0,0]
-  @@frames = {}
-  @@frames_data = {}
+  #CLASS VARIABLE
+  @@nextPosteXpos = 0
+  @@posteNextYPos = {}
+  @@posteData = {}
 
   #Pré_Cadre SKP Object
   @object = nil
@@ -28,11 +28,22 @@ class PH::Frame
     @data = argNomenclature
     posteID = @data["ID"]
 
+    #Check the Data consistency with the ID if it already exists
+    currentData = argNomenclature.to_s
+
+    if @@posteData.include?(posteID)
+      raise "The Frame data does not match with the Poste already initialised for this ID #{posteID}." unless @@posteData[posteID] == currentData
+
+    ##Store the new Poste datas
+    else
+      @@posteData[posteID] = currentData
+    end
+
     #Generate Frame container
     @object = Sketchup.active_model.active_entities.add_group
     @object.name = "POSTE #{posteID}"
     @objectPurgeEntities = [@object.entities.add_cpoint(Geom::Point3d.new)]
-    @atCoord = []
+    @atCoord = [0, 0, 0]
 
     #Get Material data
     @mat = {}
@@ -50,39 +61,29 @@ class PH::Frame
       @data[option] = (@data[option] != "")
     end
 
-    '''
-    #In case of an existing POSTE has already been generated compare their datas
-    if @@frames.key?(posteID)
-      #Incase of the same datas
-      if @@frames_data[posteID] == @data
-        #Update the current coord based on the precedent one
-        ##Update the Xaxis Poste position
-        @atCoord[0] = @@nextCoord[0]
-        @@nextCoord[0] = @atCoord[0] + @data["FRAME"]["L"] + 1000
+    #SET POSITION
+    currentID = @data["ID"].to_s.to_sym
 
-        ##Update the Yaxis frame position
-        @atCoord[1] = @@nextCoord[1]
-        @@nextCoord[1] = @atCoord[1] + 1000
+    ##Get the frame next position if the Poste has already been generated once
+    if @@posteNextYPos.key?(currentID)
+      #Get the next position
+      @atCoord[1] = @@posteNextYPos[currentID]
 
-        ##Set the Zaxis to neutral altitude position
-        @atCoord[2] = @@nextCoord[2]
-
-        #Store this one in generation
-        @@frames[posteID] << @object
-
-        #Cast an ERROR if the Poste Data do not match with the one added
-      else
-        raise "A different Frame has already been generated with the POSIE num #{posteID}" if @@frames_data[posteID] != @data
-      end
-
-      #Either store a new one
+    ##Start a new Poste position
     else
-      @@frames[posteID] = [@object]
-      @@frames_data[posteID] = @data
-    end
-    '''
-  end
+      #Set yhe position
+      @atCoord = [@@nextPosteXpos, 0, 0]
 
+      #Update the next Poste X position
+      @@nextPosteXpos += @data["FRAME"]["L"] + 2000
+
+      #Update next Frame of the same Pole Y position
+      @@posteNextYPos[currentID] = 0
+    end
+
+    ##Update Frame next position
+    @@posteNextYPos[currentID] += @data["WALL"]["T"] + 1000
+  end
 
 
   #INSTANCE DRAWING METHODS
@@ -115,11 +116,9 @@ class PH::Frame
     @objectPurgeEntities.each {|entityToDelete| entityToDelete.erase! unless entityToDelete.deleted?}
 
     #MOVE AT THE RIGHT POSITION
-    '''
     atCoord_mm = @atCoord.collect {|value| value.mm}
     moveTo = Geom::Transformation.new(atCoord_mm)
     @object.move!(moveTo)
-    '''
 
     #FINALISE OPERATION
     commit_result = Sketchup.active_model.commit_operation
