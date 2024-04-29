@@ -62,7 +62,6 @@ toolbarPH = UI::Toolbar.new("Frame") {}
 drawFrameFromMenu = UI::Command.new("Draw") {
   #Request the Frame Nomenclature
   ids = idINFO.keys + idMAT.keys + idFRAME.keys + idVR.keys + idOH.keys + idOPTIONS.keys
-  puts ids
   prompts = idINFO.values + idMAT.values + idFRAME.values + idVR.values + idOH.values + idOPTIONS.values
   defaults = defaultINFO + defaultMAT + defaultFRAME + defaultVR + defaultOH + defaultOPTIONS
   answersArray = UI.inputbox(prompts, defaults, "Paramètres du Pré-Cadre.")
@@ -103,35 +102,25 @@ toolbarPH = toolbarPH.add_item drawFrameFromMenu
 #Generate Frame drawing from CSV parsing
 drawFramesFromCSV = UI::Command.new("Draw FRAMEs from CSV") {
   #PARSE GENERIC CSV
-  #Open & Read CSV file
+  #Read CSV file
   csvFile_path = "#{__dir__}/../PH_FRAME.csv"
-  ids = ["ID","WALL|T", "WALL|FD", "WALL|RS", "MAT|OSS", "MAT|FIN", "FRAME|L", "FRAME|H", "FRAME|T", "FRAME|OFF", "VR|H", "VR|VH", "VR|VV", "VR|OFF", "OH|H", "OH|OFF", "VR?", "CS?", "BA?", "BAS?"]
 
+  CSV.foreach(csvFile_path, :headers => true) do |csvRow|
+    #Build te frame variables
+    frameIDs = csvRow.collect {|item| item[0]}[3..-3]
+    frameValues = csvRow.collect {|item| item[1]}[3..-3]
+    frameValues = frameValues.collect {|val| val == val.to_i.to_s ? val.to_i : val}
 
-  nomenclature = {}
-  hashData = {}
+    #Build the Frame Data
+    nomenclature = genFrameDataHash(frameIDs, frameValues)
+    nb = csvRow[2].to_i
 
-  CSV.foreach(csvFile_path, {"headers":true}) do |csv_line|
-    ids.each do |fullKey|
-      stringKeys = ""
-
-      #Concatenate Keys to string
-      splittedKeys = fullKey.split("|")
-      splittedKeys.each do |partKey|
-        stringKeys << "[#{partKey}]"
-
-        if partKey == splittedKeys[-1]
-          eval("hashData#{stringKeys} = csv_line[fullKey]")
-        else
-          eval("hashData#{stringKeys} = {}")
-        end
-      end
+    #Draw the Frame
+    nb.times do
+      newFrame = PH::Frame.new(nomenclature)
+      newFrame.draw
     end
-
-    nomenclature.merge_recursively!(hashData)
   end
-
-  puts nomenclature
 }
 
 #Command Specs
@@ -169,7 +158,7 @@ def genEncapsulatedHash(argIDs, argValue)
 
     #Update the value if reaching the leaf to apply value
     if index == argIDs.length-1
-      currentValue = argValue
+      currentValue = argValue.nil? ? "''" : argValue
       currentValue = "'#{currentValue}'" if currentValue.is_a? String
     end
 

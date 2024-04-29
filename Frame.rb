@@ -7,6 +7,7 @@ require_relative 'patch/hash'
 
 class PH::Frame
   #CLASS VARIABLE
+  @@posteXpos = {}
   @@nextPosteXpos = 0
   @@posteNextYPos = {}
   @@posteData = {}
@@ -31,8 +32,9 @@ class PH::Frame
     #Check the Data consistency with the ID if it already exists
     currentData = argNomenclature.to_s
 
-    if @@posteData.include?(posteID)
-      raise "The Frame data does not match with the Poste already initialised for this ID #{posteID}." unless @@posteData[posteID] == currentData
+
+    if @@posteData.include?(posteID) and currentData != @@posteData[posteID]
+      #raise "The Frame data does not match with the Poste already initialised for this ID #{posteID}." unless @@posteData[posteID] == currentData
 
     ##Store the new Poste datas
     else
@@ -64,6 +66,23 @@ class PH::Frame
     #SET POSITION
     currentID = @data["ID"].to_s.to_sym
 
+    ##Set the X Position
+    @atCoord = [0, 0, 0]
+
+    ##Generate a new X position in case a Poste with the same ID and Data hasn't been created before
+    if !@@posteXpos.key?(currentID) #and @@posteData[posteID] == currentData
+      #Update this poste X position
+      @@posteXpos[currentID] = @@nextPosteXpos
+      @atCoord[0] = @@posteXpos[currentID]
+
+      #And update the next next X position
+      @@nextPosteXpos += @data["FRAME"]["L"] + 2000
+    end
+
+    ##Set te Poste X position
+    @atCoord[0] = @@posteXpos[currentID]
+
+    ##Set the Y Position
     ##Get the frame next position if the Poste has already been generated once
     if @@posteNextYPos.key?(currentID)
       #Get the next position
@@ -71,12 +90,6 @@ class PH::Frame
 
     ##Start a new Poste position
     else
-      #Set yhe position
-      @atCoord = [@@nextPosteXpos, 0, 0]
-
-      #Update the next Poste X position
-      @@nextPosteXpos += @data["FRAME"]["L"] + 2000
-
       #Update next Frame of the same Pole Y position
       @@posteNextYPos[currentID] = 0
     end
