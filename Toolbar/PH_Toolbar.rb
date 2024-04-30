@@ -112,12 +112,21 @@ drawFramesFromCSV = UI::Command.new("Draw FRAMEs from CSV") {
     frameValues = frameValues.collect {|val| val == val.to_i.to_s ? val.to_i : val}
 
     #Build the Frame Data
-    nomenclature = genFrameDataHash(frameIDs, frameValues)
+    nomenclatureData = genFrameDataHash(frameIDs, frameValues)
     nb = csvRow[2].to_i
 
     #Draw the Frame
     nb.times do
-      newFrame = PH::Frame.new(nomenclature)
+      #Fix the data errors
+      nomenclatureData.each_pair do |currentID, currentValue|
+        if currentID.include? "?"
+          nomenclatureData[currentID] = "X" if currentValue == true
+          nomenclatureData[currentID] = "" if currentValue == false
+        end
+      end
+
+      #Draw the Frame
+      newFrame = PH::Frame.new(nomenclatureData)
       newFrame.draw
     end
   end
