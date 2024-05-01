@@ -12,13 +12,16 @@ class PH::Frame
   @@posteNextYPos = {}
   @@posteData = {}
 
-  #Pré_Cadre SKP Object
+
+  #INSTANCE VARIABLE
   @object = nil
   @objectPurgeEntities = []
   @atCoord = []
-
-  #INSTANCE VARIABLE
   @data
+
+  #INSTANCE VARIABLE ACCESSORS
+  attr_accessor :object
+  attr_accessor :data
 
 
   #CONSTRUCTOR
@@ -440,5 +443,19 @@ class PH::Frame
       itemComponentInstances << PH::SKP.drawOBJ(coordsObj, chapeau_height, argCDname:"P#{@data["ID"]}|CHAPEAU", argCIpos:[-@mat[@matOSS_Name]["Thickness"], 0, ohAltitude+@data["OH"]["H"]+chapeau_height], argContainer:@object)
       itemComponentInstances[-1].material = PH::SKP.getShader("SupportT10")
     end
+  end
+
+
+  #CLASS METHODS
+  # Method to reinitialise Postes drawing positions.
+  # @return nil
+  # @!scope class
+  # @!group Maintenance
+  # @version 0.11.2
+  # @since 0.11.2
+  def self.initPostesPositions
+    @@posteXpos = {}
+    @@nextPosteXpos = 0
+    @@posteNextYPos = {}
   end
 end

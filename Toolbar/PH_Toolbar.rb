@@ -13,6 +13,7 @@ require 'csv'
 require_relative '../PH'
 require_relative '../patch/hash'
 require_relative '../Frame'
+require_relative '../FileObserver'
 
 
 #NOMENCLATURE DEFINITION
