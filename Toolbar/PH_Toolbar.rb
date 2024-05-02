@@ -103,10 +103,11 @@ toolbarPH = toolbarPH.add_item drawFrameFromMenu
 #Generate Frame drawing from CSV parsing
 drawFramesFromCSV = UI::Command.new("Draw FRAMEs from CSV") {
   #PARSE GENERIC CSV
-  #Read CSV file
-  csvFile_path = "#{__dir__}/../PH_FRAME.csv"
+  #Open the CSV file
+  chosenCSV = UI.openpanel("Select the CSV file to generate the Frames", "C:/Program Files/SketchUp/SketchUp 2023/plugins/PH/PH_FRAME.csv", "CSV|*.csv||")
+  #csvFile_path = "#{__dir__}/../PH_FRAME.csv"
 
-  CSV.foreach(csvFile_path, :headers => true) do |csvRow|
+  CSV.foreach(chosenCSV, :headers => true) do |csvRow|
     #Build te frame variables
     frameIDs = csvRow.collect {|item| item[0]}[3..-3]
     frameValues = csvRow.collect {|item| item[1]}[3..-3]

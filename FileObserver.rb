@@ -8,6 +8,10 @@ class PH::FileObserver < Sketchup::AppObserver
   def onOpenModel(model)
     #Reset the Frame Positions
     PH::Frame.initPostesPositions
+
+    #Reload Frame data positions
+    skpAD = Sketchup.active_model.attribute_dictionary("data", create_if_empty)
+    skpAD[posteID] = @data
   end
 end
 
