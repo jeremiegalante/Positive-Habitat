@@ -16,7 +16,16 @@ require_relative '../Frame'
 require_relative '../FileObserver'
 
 
+#DEFINE POSTES
+existingPostes = []
+
 #NOMENCLATURE DEFINITION
+idSPLIT = {"NA1": "INFOS BASIQUES --------------------------------------------------------------",
+           "NA2": "COFFRET VOLET ---------------------------------------------------------------",
+           "NA3": "OPTIONS ------------------------------------------------------------------------",
+           "NA4": "AUTRES -------------------------------------------------------------------------"}
+defaultSPLIT = ["-------------------------------"]
+
 ##ID Global
 idINFO = {"ID": "NUM POSTE [Integer]",
           "WALL|T": "Epaisseur du Mur [Decimal|400mm]",
@@ -26,34 +35,39 @@ defaultINFO = ["0", "400", "200", "54"]
 
 ##ID des Matériaux
 idMAT = {"MAT|OSS": "Matière Ossature [String|Nom]",
-         "MAT|FIN": "Matière Finition"}
-defaultMAT = ["TreplisT19", ""]
+         "MAT|FIN": "Matière Finition [String|Nom]"}
+defaultMAT = ["3PlisT19", "3PlisDouglasT19"]
 
 ##ID du Pré-Cadre
 idFRAME = {"FRAME|L": "Longueur du Pré-Cadre [Decimal|mm]",
-           "FRAME|H": "Hauteur du Pré-Cadre  [Decimal|mm]",
-           "FRAME|T": "Epaisseur PSE du Pré-Cadre [Decimal|78mm]",
-           "FRAME|OFF": "Espace du Jeu Compribande du Pré-Cadre [Decimal|5mm]"}
-defaultFRAME = ["3000", "2500", "78", "5"]
+           "FRAME|H": "Hauteur du Pré-Cadre  [Decimal|mm]"}
+defaultFRAME = ["3000", "2500"]
 
-##ID Volet Roulant
-idVR = {"VR|H":"Hauteur Volet Roulant [Decimal|180mm]", #
-        "VR|VH":"Longueur Volet Horizontal [Decimal|200mm]", #
-        "VR|VV":"Longueur Volet Vertical [Decimal|180mm]",
-        "VR|OFF":"Marge hauteur Volet Vertical sans Châpeau Supérieur [Decimal|3mm]"}
-defaultVR = ["180", "200", "180", "3"]
+##ID Coffret Volet
+idCV = {"CV|H":"Hauteur Coffret/Volet [Decimal|180mm]",
+        "CV|L":"Largeur de devant le Coffret/Volet [Decimal|200mm]",
+        "CV|VH":"Profonfondeur Coffret/Volet [Decimal|200mm]"}
+defaultCV = ["180", "200", "180"]
 
 ##ID Sur-Hauteur
-idOH = {"OH|H":"Valeur Sur-Hauteur [Decimal|mm]",
+idOH = {"OH|H":"Sur-Hauteur Coffret/Volet [Decimal|mm]",
         "OH|OFF":"Retrait Montants de la Sur-Hauteur [Decimal|3mm]"}
 defaultOH = ["0", "3"]
 
 ##ID Options à activer
-idOPTIONS = {"VR?":"Activation Coffre Vollet [X]",
+idOPTIONS = {"CV?":"Activation Coffret Volet [X]",
              "CS?":"Activation Châpeau Supérieur [X]",
              "BA?":"Activation Bois/Alu [X]",
-             "BAS?": "Activation du Support en bas  [X]"}
-defaultOPTIONS = ["X", "X", "X", "X"]
+             "BAS?":"Activation du Support en bas [X]"}
+defaultOPTIONS = ["X", "", "X", "X"]
+
+##Infos secondaires
+idSECOND = {"FRAME|T": "Epaisseur PSE du Pré-Cadre [Decimal|78mm]",
+            "FRAME|OFF": "Espace du Jeu Compribande du Pré-Cadre [Decimal|5mm]",
+            "MAT|OFF": "Écart de hauteur montant Ossature et Finition [Decimal|10mm]",
+            "MAT|GAP": "Écart entre la Finition et le Pré-Cadre si Bois/Alu [Decimal|17mm]",
+            "CV|OFF": "Décalage Coffret Volet Vert et Montant sans CS [Decimal|3mm]"}
+defaultSECOND = ["78", "5", "10", "17", "3"]
 
 #PH TOOLBAR
 toolbarPH = UI::Toolbar.new("Frame") {}
@@ -62,9 +76,9 @@ toolbarPH = UI::Toolbar.new("Frame") {}
 #Generate Pré-Cadre drawing query
 drawFrameFromMenu = UI::Command.new("Draw") {
   #Request the Frame Nomenclature
-  ids = idINFO.keys + idMAT.keys + idFRAME.keys + idVR.keys + idOH.keys + idOPTIONS.keys
-  prompts = idINFO.values + idMAT.values + idFRAME.values + idVR.values + idOH.values + idOPTIONS.values
-  defaults = defaultINFO + defaultMAT + defaultFRAME + defaultVR + defaultOH + defaultOPTIONS
+  ids = idSPLIT.keys[0..0] + idINFO.keys + idMAT.keys + idFRAME.keys + idSPLIT.keys[1..1] + idCV.keys + idOH.keys + idSPLIT.keys[2..2] + idOPTIONS.keys + idSPLIT.keys[3..3] + idSECOND.keys
+  prompts = idSPLIT.values[0..0] + idINFO.values + idMAT.values + idFRAME.values + idSPLIT.values[1..1] + idCV.values + idOH.values + idSPLIT.values[2..2] + idOPTIONS.values + idSPLIT.values[3..3] + idSECOND.values
+  defaults = defaultSPLIT + defaultINFO + defaultMAT + defaultFRAME + defaultSPLIT + defaultCV + defaultOH + defaultSPLIT + defaultOPTIONS + defaultSPLIT + defaultSECOND
   answersArray = UI.inputbox(prompts, defaults, "Paramètres du Pré-Cadre.")
 
   #Convert String values to Integer if possible
@@ -82,6 +96,7 @@ drawFrameFromMenu = UI::Command.new("Draw") {
 
   #Generate the Frame Hash Data
   frameData = genFrameDataHash(ids, answersMerge)
+  frameData.keys.each{|del| frameData.delete(del) if del.include?("NA")}
 
   #Generate Drawing
   newFrame = PH::Frame.new(frameData)
@@ -109,25 +124,18 @@ drawFramesFromCSV = UI::Command.new("Draw FRAMEs from CSV") {
 
   CSV.foreach(chosenCSV, :headers => true) do |csvRow|
     #Build te frame variables
-    frameIDs = csvRow.collect {|item| item[0]}[3..-3]
-    frameValues = csvRow.collect {|item| item[1]}[3..-3]
-    frameValues = frameValues.collect {|val| val == val.to_i.to_s ? val.to_i : val}
+    frameIDs = csvRow.collect {|item| item[0]}#[3..-3]
+    frameValues = csvRow.collect {|item| item[1]}#[3..-3]
+    frameValues.collect! {|val| val == val.to_i.to_s ? val.to_i : val}
 
     #Build the Frame Data
     nomenclatureData = genFrameDataHash(frameIDs, frameValues)
-    nb = csvRow[2].to_i
+    nb = csvRow[0].to_i
+    backNomID = nomenclatureData["ID"] #Backup ID
 
     #Draw the Frame
     nb.times do
-      #Fix the data errors
-      nomenclatureData.each_pair do |currentID, currentValue|
-        if currentID.include? "?"
-          nomenclatureData[currentID] = "X" if currentValue == true
-          nomenclatureData[currentID] = "" if currentValue == false
-        end
-      end
-
-      #Draw the Frame
+      nomenclatureData["ID"] = backNomID #Restore ID
       newFrame = PH::Frame.new(nomenclatureData)
       newFrame.draw
     end
