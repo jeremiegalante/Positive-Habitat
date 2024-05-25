@@ -29,9 +29,8 @@ defaultSPLIT = ["-------------------------------"]
 ##ID Global
 idINFO = {"ID": "NUM POSTE [Integer]",
           "WALL|T": "Epaisseur du Mur [Decimal|400mm]",
-          "WALL|FD": "Distance face extérieure [Decimal|200mm]",
-          "WALL|RS": "Renfort de montants [Decimal|54mm]"}
-defaultINFO = ["0", "400", "200", "54"]
+          "WALL|FD": "Distance face extérieure [Decimal|200mm]"}
+defaultINFO = ["0", "400", "200"]
 
 ##ID des Matériaux
 idMAT = {"MAT|OSS": "Matière Ossature [String|Nom]",
@@ -65,9 +64,11 @@ defaultOPTIONS = ["X", "", "X", "X"]
 idSECOND = {"FRAME|T": "Epaisseur PSE du Pré-Cadre [Decimal|78mm]",
             "FRAME|OFF": "Espace du Jeu Compribande du Pré-Cadre [Decimal|5mm]",
             "MAT|OFF": "Écart de hauteur montant Ossature et Finition [Decimal|10mm]",
-            "MAT|GAP": "Écart entre la Finition et le Pré-Cadre si Bois/Alu [Decimal|17mm]",
-            "CV|OFF": "Décalage Coffret Volet Vert et Montant sans CS [Decimal|3mm]"}
-defaultSECOND = ["78", "5", "10", "17", "3"]
+            "CV|OFF": "Décalage Coffret Volet V et Montant sans CS [Decimal|3mm]",
+            "FIN|SGAP": "Écart entre Finition et Pré-Cadre si Bois/Alu [Decimal|17mm]",
+            "FIN|EGAP": "Écart entre fin Finition et Montant [Decimal|64mm]",
+            "FIN|VGAP": "Écart en hauteur Finition (Haut/Bas) [Decimal|1mm]"}
+defaultSECOND = ["78", "5", "10", "3", "17", "64", "1"]
 
 #PH TOOLBAR
 toolbarPH = UI::Toolbar.new("Frame") {}

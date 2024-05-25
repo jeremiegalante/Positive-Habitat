@@ -39,7 +39,12 @@ class PH::Frame
     @ID = @data.delete("ID")
 
     #Change the ID in case a Frame already exists with the same ID and not the same data
-    @ID = rand 500..1000 if @@posteData.keys.include? @ID and @@posteData[@ID] != @data
+    @ID = 0
+    @@posteData.keys.sort.each do |currentID|
+      break if currentID > @ID
+      @ID += 1
+    end
+    #@ID = rand 500..1000 if @@posteData.keys.include? @ID and @@posteData[@ID] != @data
 
     #Store the new data generated
     @@posteData[@ID] = @data unless @@posteData.keys.include?(@ID)
@@ -137,10 +142,10 @@ class PH::Frame
     draw_xps
 
     #DRAW Coffret/Volet
-    draw_CV if @data["CV"]
+    draw_CV if @data["CV?"]
 
     #DRAW FENÊTRE/BOIS
-    #draw_finishingStuds if @data["MAT"]["FIN"] != ""
+    draw_finishingStuds if @data["MAT"]["FIN"] != ""
 
     #CLEAN/DELETE SECURITY ENTITIES
     @objectPurgeEntities.each {|entityToDelete| entityToDelete.erase! unless entityToDelete.deleted?}
@@ -229,7 +234,7 @@ class PH::Frame
                  @data["FRAME"]["OFF"] +
                  @data["CV"]["H"] +
                  @data["OH"]["H"] +
-                 (( (@data["OH"]["H"] == 0) and @data["CS"]) ? supportT : 0)
+                 (( @data["OH"]["H"] == 0 and @data["CS?"] == "X") ? supportT+@data["OH"]["OFF"] : 0)
 
     #Define Component Names
     componentDefinitionName = "P#{@ID}|MONTANT PX_"
@@ -249,20 +254,21 @@ class PH::Frame
     end
 
     #Generate Châpeau if requested
-    if @data["CS"]
-      #Define Drawing Coords
-      cupHatLength = @data["FRAME"]["L"] + 2*@data["FRAME"]["OFF"]
+    if @data["CS?"] == "X"
+      ##Define Drawing Coords
+      chapeau_height = PH::CFG.getOCLmaterialData("3PlisT10")["Thickness"]
+      chapeauLength = @data["FRAME"]["L"] + 2*@data["FRAME"]["OFF"]
       coordsObj = {
+        "X" => [0, chapeauLength],
         "Y" => [0, @data["WALL"]["T"]],
-        "Z" => [-3, -(supportT+3)],
-        "X" => [0, 0]
+        "Z" => [0, 0]
       }
 
       #Define Component Names
       componentDefinitionName = "P#{@ID}|CHAPEAU"
 
       #Generate Instance
-      itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -cupHatLength, argCDname:componentDefinitionName, argCIpos:[0, 0, studHeight], argContainer:@object)
+      itemComponentInstances << PH::SKP.drawOBJ(coordsObj, chapeau_height, argCDname:componentDefinitionName, argCIpos:[0, 0, studHeight-@data["OH"]["OFF"]], argContainer:@object)
       itemComponentInstances[-1].material = PH::SKP.getShader("3PlisT10")
     end
 
@@ -441,48 +447,42 @@ class PH::Frame
       transformation = Geom::Transformation.new([0, 0, ohAltitude.mm])
       newGroup.move!(transformation)
     end
-
-    #DRAW CHAPEAU SUPERIEUR
-    if @data["CS?"]
-      ##Define Drawing Coords
-      chapeau_height = PH::CFG.getOCLmaterialData("3PlisT10")["Thickness"]
-      chapeauLength = @data["FRAME"]["L"] + 2*@data["FRAME"]["OFF"]
-      coordsObj = {
-        "X" => [0, chapeauLength],
-        "Y" => [0, @data["WALL"]["T"]],
-        "Z" => [0, 0]
-      }
-
-      #Generate Instance
-      itemComponentInstances << PH::SKP.drawOBJ(coordsObj, chapeau_height, argCDname:"P#{@ID}|CHAPEAU", argCIpos:[0, 0, ohAltitude+@data["OH"]["H"]+chapeau_height], argContainer:@object)
-      itemComponentInstances[-1].material = PH::SKP.getShader("3PlisT10")
-    end
   end
 
   # Method to draw finishing studs.
   # @return [Array<Sketchup::ComponentInstance>] the OCL finishing Studs component instances generated.
   # @!scope instance
   # @!group Drawing Methods
-  # @version 0.12.0
+  # @version 0.12.1
   # @since 0.12.0
   def draw_finishingStuds
-    #Define Drawing Coords
-    matData = PH::CFG.getOCLmaterialData(@data["MAT"]["FIN"])
-    studWidth = @data["WALL"]["FD"] - (@data["BA?"] ? @data["MAT"]["GAP"] : 0)
-    coordsObj = {
-      "X" => [0, matData["Thickness"]],
-      "Y" => [0, studWidth],
-      "Z" => [0, 0]
-    }
-
+    #Get material Data
+    matDataFIN = PH::CFG.getOCLmaterialData(@data["MAT"]["FIN"])
+    matDataOSS = PH::CFG.getOCLmaterialData(@data["MAT"]["OSS"])
     supportT = PH::CFG.getOCLmaterialData("3PlisT10")["Thickness"]
-    studHeight = supportT + 45 +
-      @data["FRAME"]["H"] +
-      @data["FRAME"]["OFF"] +
-      @data["CV"]["H"] +
-      @data["OH"]["H"] +
-      (( (@data["OH"]["H"] == 0) and @data["CS"]) ? supportT : 0) -
-      2 * @data["MAT"]["OFF"]
+
+    #Define Drawing Coords
+    offsetBAlu = @data["BA?"] == "X" ? @data["FIN"]["SGAP"] : 0
+    studFinWidth = @data["WALL"]["FD"] + @data["FIN"]["EGAP"] - offsetBAlu
+    studFinHeight = @data["FRAME"]["H"] +
+                    @data["FRAME"]["OFF"] +
+                    @data["CV"]["H"] -
+                    (10 + @data["FIN"]["VGAP"])
+
+    leftPosition = [matDataOSS["Thickness"],
+                    0,
+                    (supportT + 45) + 10 + @data["FIN"]["VGAP"]]
+
+    rightPosition = [matDataOSS["Thickness"] + @data["FRAME"]["L"] + 2*@data["FRAME"]["OFF"] - matDataFIN["Thickness"],
+                     0,
+                     (supportT + 45) + 10 + @data["FIN"]["VGAP"]]
+
+    #Define face coordinates
+    face_coords = []
+    face_coords << [0, @data["WALL"]["FD"]-offsetBAlu, 0]
+    face_coords << [0, -@data["FIN"]["EGAP"], -(studFinWidth * 0.1).round]
+    face_coords << [0, -@data["FIN"]["EGAP"], studFinHeight]
+    face_coords << [0, @data["WALL"]["FD"]-offsetBAlu, studFinHeight]
 
     #Define Component Names
     componentDefinitionName = "P#{@ID}|MONTANT FIN_"
@@ -491,14 +491,14 @@ class PH::Frame
     itemComponentInstances = []
 
     #Generate Left Instance
-    itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -studHeight, argCDname:"#{componentDefinitionName}Left", argCIpos:[-@mat[@matOSS_Name]["Thickness"], 0, 0], argContainer:@object)
+    itemComponentInstances << PH::SKP.drawOBJ(face_coords, matDataFIN["Thickness"], argCDname:"#{componentDefinitionName}Left", argCIpos:leftPosition, argContainer:@object)
 
     #Generate Right Instance
-    itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -studHeight, argCDname:"#{componentDefinitionName}Right", argCIpos:[@data["FRAME"]["L"]-matData["Thickness"], 0, 0], argContainer:@object)
+    itemComponentInstances << PH::SKP.drawOBJ(face_coords, matDataFIN["Thickness"], argCDname:"#{componentDefinitionName}Right", argCIpos:rightPosition, argContainer:@object)
 
-    #Apply OCL material
+    #Apply modifications
     itemComponentInstances.each do |currentCI|
-      currentCI.material = PH::SKP.getShader(@matOSS_Name)
+      currentCI.material = PH::SKP.getShader(@matFIN_Name)
     end
   end
 
