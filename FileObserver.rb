@@ -38,3 +38,55 @@ end
 
 #Connect file observer
 Sketchup.add_observer(PH::FileObserver.new)
+
+class PH::SelectionObserver < Sketchup::SelectionObserver
+  @@previousSelection = []
+  @@orderedSelection = {}
+
+  #CLASS VARIABLE ACCESSORS
+  def self.selection; return @@orderedSelection; end
+
+  # In case of selection cleared, method that empty the ordered list of selected entities.
+  # @return Hash
+  # @version 0.x.x
+  # @since 0.x.x
+  def onSelectionBulkChange(selection)
+    #Convert selection to list
+    argCurrentSelection = selection.to_a
+    puts argCurrentSelection
+
+    #Find the added or removed entity
+    remEntity = (@@previousSelection - argCurrentSelection)[0]
+    addEntity = (argCurrentSelection - @@previousSelection)[0]
+
+    #Update previous selection
+    @@previousSelection = argCurrentSelection
+
+    #Update ordered selection
+    ##In cae of entity adding
+    if @@orderedSelection.length <= 2
+      unless addEntity.nil?
+        [1,2,3].each do |order|
+          unless @@orderedSelection.values.include? order
+            @@orderedSelection[addEntity] = order
+            break
+          end
+        end
+      end
+    end
+
+    ##In case of entity removing
+    @@orderedSelection.delete(remEntity) unless remEntity.nil?
+
+    return @@orderedSelection
+  end
+
+  def onSelectionCleared(selection)
+    #Reinitialise selection memories
+    @@previousSelection = []
+    @@orderedSelection = {}
+  end
+end
+
+#Connect selection observer
+Sketchup.active_model.selection.add_observer(PH::SelectionObserver.new)

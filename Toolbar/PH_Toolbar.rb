@@ -13,6 +13,7 @@ require 'csv'
 require_relative '../PH'
 require_relative '../patch/hash'
 require_relative '../Frame'
+require_relative '../CornerFrame'
 require_relative '../FileObserver'
 
 
@@ -20,66 +21,54 @@ require_relative '../FileObserver'
 existingPostes = []
 
 #NOMENCLATURE DEFINITION
-idSPLIT = {"NA1": "INFOS BASIQUES --------------------------------------------------------------",
-           "NA2": "COFFRET VOLET ---------------------------------------------------------------",
-           "NA3": "OPTIONS ------------------------------------------------------------------------",
-           "NA4": "AUTRES -------------------------------------------------------------------------"}
+idSPLIT = {"NA1": "MENUISERIE -----------------------------------------------",
+           "NA2": "COFFRE VOLET --------------------------------------------",
+           "NA3": "FINITIONS -------------------------------------------------",
+           "NA4": "OPTIONS ---------------------------------------------------"}
 defaultSPLIT = ["-------------------------------"]
 
-##ID Global
-idINFO = {"ID": "NUM POSTE [Integer]",
-          "WALL|T": "Epaisseur du Mur [Decimal|400mm]",
-          "WALL|FD": "Distance face extérieure [Decimal|200mm]"}
-defaultINFO = ["0", "400", "200"]
+##SECTION MENUISERIE
+idMEN = {"ID": "Numéro de Poste",
+         "FRAME|L": "Longueur Menuiserie [mm]",
+         "FRAME|H": "Hauteur Menuiserie  [mm]",
+         "FRAME|CMP": "Espace Compribande Côté+Haut [mm]",
+         "FRAME|CMPB": "Espace Compribande Bas [mm]"}
+defaultMEN = ["1", "1000", "2200", "5", "5"]
 
-##ID des Matériaux
-idMAT = {"MAT|OSS": "Matière Ossature [String|Nom]",
-         "MAT|FIN": "Matière Finition [String|Nom]"}
-defaultMAT = ["3PlisT19", "3PlisDouglasT19"]
+#SECTION COFFRE VOLLET
+idCV = {"CV|H":"Hauteur Coffre Volet [mm]",
+        "OH|H":"Sur-Hauteur Coffret/Volet [mm]",
+        "OH|OFF":"Retrait Montants de la Sur-Hauteur [mm]",
+        "CS?":"Activation Châpeau Supérieur [X]"}
+defaultCV = ["180", "0", "2", ""]
 
-##ID du Pré-Cadre
-idFRAME = {"FRAME|L": "Longueur du Pré-Cadre [Decimal|mm]",
-           "FRAME|H": "Hauteur du Pré-Cadre  [Decimal|mm]"}
-defaultFRAME = ["3000", "2500"]
+#SECTION FINITIONS
+idFIN = {"FIN?":"Activation Finition [X]",
+         "FIN|EGAP":"Sur-Longueur extérieur Finition [mm]",
+         "FIN|SGAP": "Écart entre Finition et Pré-Cadre si Bois/Alu [mm]",
+         "FIN|VGAP": "Écart en hauteur Finition (Haut/Bas) [mm]",
+         "FIN|UH":"Sous-Hauteur Finition [mm]",
+         "BA?":"Activation Bois/Alu [X]"}
+defaultFIN = ["X", "64", "17", "1", "30", "X"]
 
-##ID Coffret Volet
-idCV = {"CV|H":"Hauteur Coffret/Volet [Decimal|180mm]",
-        "CV|L":"Largeur de devant le Coffret/Volet [Decimal|200mm]",
-        "CV|VH":"Profonfondeur Coffret/Volet [Decimal|200mm]"}
-defaultCV = ["180", "200", "180"]
-
-##ID Sur-Hauteur
-idOH = {"OH|H":"Sur-Hauteur Coffret/Volet [Decimal|mm]",
-        "OH|OFF":"Retrait Montants de la Sur-Hauteur [Decimal|3mm]"}
-defaultOH = ["0", "3"]
-
-##ID Options à activer
-idOPTIONS = {"CV?":"Activation Coffret Volet [X]",
-             "CS?":"Activation Châpeau Supérieur [X]",
-             "BA?":"Activation Bois/Alu [X]",
-             "BAS?":"Activation du Support en bas [X]"}
-defaultOPTIONS = ["X", "", "X", "X"]
-
-##Infos secondaires
-idSECOND = {"FRAME|T": "Epaisseur PSE du Pré-Cadre [Decimal|78mm]",
-            "FRAME|OFF": "Espace du Jeu Compribande du Pré-Cadre [Decimal|5mm]",
-            "MAT|OFF": "Écart de hauteur montant Ossature et Finition [Decimal|10mm]",
-            "CV|OFF": "Décalage Coffret Volet V et Montant sans CS [Decimal|3mm]",
-            "FIN|SGAP": "Écart entre Finition et Pré-Cadre si Bois/Alu [Decimal|17mm]",
-            "FIN|EGAP": "Écart entre fin Finition et Montant [Decimal|64mm]",
-            "FIN|VGAP": "Écart en hauteur Finition (Haut/Bas) [Decimal|1mm]"}
-defaultSECOND = ["78", "5", "10", "3", "17", "64", "1"]
+#SECTION OPTIONS
+idOPTIONS = {"WALL|T": "Epaisseur du Mur [mm]",
+             "WALL|FD": "Distance face extérieure [mm]",
+             "FRAME|T": "Epaisseur cadre menuiserie [mm]",
+             "MAT|OSS": "Matière Ossature",
+             "MAT|FIN": "Matière Finition"}
+defaultOPTIONS = ["400", "200", "78", "3PlisT19", "3PlisDouglasT19"]
 
 #PH TOOLBAR
 toolbarPH = UI::Toolbar.new("Frame") {}
 
 #PRE-CADRE COMMANDS
 #Generate Pré-Cadre drawing query
-drawFrameFromMenu = UI::Command.new("Draw") {
+drawFrameFromMenu = UI::Command.new("Génération Pré-Cadre") {
   #Request the Frame Nomenclature
-  ids = idSPLIT.keys[0..0] + idINFO.keys + idMAT.keys + idFRAME.keys + idSPLIT.keys[1..1] + idCV.keys + idOH.keys + idSPLIT.keys[2..2] + idOPTIONS.keys + idSPLIT.keys[3..3] + idSECOND.keys
-  prompts = idSPLIT.values[0..0] + idINFO.values + idMAT.values + idFRAME.values + idSPLIT.values[1..1] + idCV.values + idOH.values + idSPLIT.values[2..2] + idOPTIONS.values + idSPLIT.values[3..3] + idSECOND.values
-  defaults = defaultSPLIT + defaultINFO + defaultMAT + defaultFRAME + defaultSPLIT + defaultCV + defaultOH + defaultSPLIT + defaultOPTIONS + defaultSPLIT + defaultSECOND
+  ids = idSPLIT.keys[0..0] + idMEN.keys + idSPLIT.keys[1..1] + idCV.keys + idSPLIT.keys[2..2] + idFIN.keys + idSPLIT.keys[3..3] + idOPTIONS.keys
+  prompts = idSPLIT.values[0..0] + idMEN.values + idSPLIT.values[1..1] + idCV.values + idSPLIT.values[2..2] + idFIN.values + idSPLIT.values[3..3] + idOPTIONS.values
+  defaults = defaultSPLIT + defaultMEN + defaultSPLIT + defaultCV + defaultSPLIT + defaultFIN + defaultSPLIT + defaultOPTIONS
   answersArray = UI.inputbox(prompts, defaults, "Paramètres du Pré-Cadre.")
 
   #Convert String values to Integer if possible
@@ -151,6 +140,48 @@ drawFramesFromCSV.large_icon = "#{iconsFolder}#{iconName}"
 drawFramesFromCSV.status_bar_text = "Remplacer le contenu du fichier 'PH_FRAME.csv' dans le dossier du Plugin PH."
 drawFramesFromCSV.tooltip = "FRAME from CSV"
 toolbarPH = toolbarPH.add_item drawFramesFromCSV
+
+
+#PRE-CADRE ANGLE COMMANDS
+#Generate Pré-Cadre Angle drawing query
+drawFrameAngle = UI::Command.new("Draw Pré-Cadre Angle") {
+  #ID Global
+  idMAIN = {"ANGLE|POS": "Position de l'angle du retour",
+            "ANGLE|VAL": "Valeur Trigonometrique de l'angle du retour [°]",
+            "OSS|W": "Largeur du poteau d'Angle de renfort [mm]",
+            "OSS|ALL": "Hauteur d'Allège sous la fenêtre [mm]",
+            "OSS|LIN": "Hauteur de Linteau au-dessus de la fenêtre [mm]",
+            "DOOR?":"Activation d'une porte axe principal opposé à l'Angle [X]"}
+  defaultMAIN = ["G|D", "90","120", "1000", "450", "X"]
+
+  #Request the Corner Frame Nomenclature
+  ids = idMAIN.keys
+  prompts = idMAIN.values
+  defaults = defaultMAIN
+  answersArray = UI.inputbox(prompts, defaults, "Paramètres du Pré-Cadre d'Angle.")
+
+  #Convert String values to Integer if possible
+  answersArray.collect! do |originalValue|
+    (originalValue == originalValue.to_i.to_s) ? originalValue.to_i : originalValue
+  end
+
+  #Generate the Frame Hash Data
+  frameData = genFrameDataHash(ids, answersArray)
+  frameData.keys.each{|del| frameData.delete(del) if del.include?("NA")}
+
+  #Generate Drawing
+  newCorner = PH::CornerFrame.new(frameData)
+  newCorner.assemble
+}
+
+#Command Specs
+toolbarPH = toolbarPH.add_item drawFrameAngle
+iconName = "[24x24]_Angle Window.png"
+drawFrameAngle.small_icon = "#{iconsFolder}#{iconName}"
+drawFrameAngle.large_icon = "#{iconsFolder}#{iconName}"
+drawFrameAngle.status_bar_text = "Combiner les PréCadres selectionnés en PréCadres d'angle."
+drawFrameAngle.tooltip = "ANGLE FRAME"
+toolbarPH = toolbarPH.add_item drawFrameAngle
 
 
 #GENERATE THE TOOLBAR

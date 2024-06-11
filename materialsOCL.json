@@ -7,9 +7,17 @@
     "OCL_RGBA":[30,255,128,1],
     "Thickness": 19
   },
+  "3PlisT22": {
+    "OCL_RGBA":[30,255,64,1],
+    "Thickness": 22
+  },
   "3PlisDouglasT19": {
     "OCL_RGBA":[255,128,0,1],
     "Thickness": 19
+  },
+  "3PlisDouglasT25": {
+    "OCL_RGBA":[255,64,0,1],
+    "Thickness": 25
   },
   "FrameXPS": {
     "OCL_RGBA":[255,255,100,1]
