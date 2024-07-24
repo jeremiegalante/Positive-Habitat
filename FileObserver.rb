@@ -53,7 +53,6 @@ class PH::SelectionObserver < Sketchup::SelectionObserver
   def onSelectionBulkChange(selection)
     #Convert selection to list
     argCurrentSelection = selection.to_a
-    puts argCurrentSelection
 
     #Find the added or removed entity
     remEntity = (@@previousSelection - argCurrentSelection)[0]
@@ -66,7 +65,7 @@ class PH::SelectionObserver < Sketchup::SelectionObserver
     ##In cae of entity adding
     if @@orderedSelection.length <= 2
       unless addEntity.nil?
-        [1,2,3].each do |order|
+        (0..2).each do |order|
           unless @@orderedSelection.values.include? order
             @@orderedSelection[addEntity] = order
             break
@@ -78,6 +77,7 @@ class PH::SelectionObserver < Sketchup::SelectionObserver
     ##In case of entity removing
     @@orderedSelection.delete(remEntity) unless remEntity.nil?
 
+    puts @@orderedSelection
     return @@orderedSelection
   end
 

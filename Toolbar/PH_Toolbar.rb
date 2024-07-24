@@ -3,6 +3,10 @@ load "E:/#GITHUB/PH/Toolbar/PH_Toolbar.rb"
 load "D:/_GITHUB/PH/Toolbar/PH_Toolbar.rb"
 
 DOC YARD https://yardoc.org/
+
+Incrementation ID pour nouveau
+X fois
+Rechargement/Modification nomenclature
 '''
 
 #Load Sketchup Requires
@@ -96,13 +100,12 @@ drawFrameFromMenu = UI::Command.new("Génération Pré-Cadre") {
 #Command Specs
 iconsFolder = "#{__dir__}/Icons/"
 
-toolbarPH = toolbarPH.add_item drawFrameFromMenu
-iconName = "[24x24]_Frame Window.png"
+iconName = "[32x32]_Frame Window.png"
 drawFrameFromMenu.small_icon = "#{iconsFolder}#{iconName}"
 drawFrameFromMenu.large_icon = "#{iconsFolder}#{iconName}"
 drawFrameFromMenu.status_bar_text = ""
 drawFrameFromMenu.tooltip = "FRAME Nom Nomenclature"
-toolbarPH = toolbarPH.add_item drawFrameFromMenu
+toolbarPH = toolbarPH.add_item drawFrameFromMenu if PH::AUTORIZE
 
 #FRAMES CSV COMMAND
 #Generate Frame drawing from CSV parsing
@@ -133,26 +136,24 @@ drawFramesFromCSV = UI::Command.new("Draw FRAMEs from CSV") {
 }
 
 #Command Specs
-toolbarPH = toolbarPH.add_item drawFramesFromCSV
-iconName = "[24x24]_Frame CSV.png"
+iconName = "[32x32]_Frame CSV.png"
 drawFramesFromCSV.small_icon = "#{iconsFolder}#{iconName}"
 drawFramesFromCSV.large_icon = "#{iconsFolder}#{iconName}"
-drawFramesFromCSV.status_bar_text = "Remplacer le contenu du fichier 'PH_FRAME.csv' dans le dossier du Plugin PH."
+drawFramesFromCSV.status_bar_text = "Choix du fichier CSV à générer."
 drawFramesFromCSV.tooltip = "FRAME from CSV"
-toolbarPH = toolbarPH.add_item drawFramesFromCSV
+toolbarPH = toolbarPH.add_item drawFramesFromCSV if PH::AUTORIZE
 
 
 #PRE-CADRE ANGLE COMMANDS
 #Generate Pré-Cadre Angle drawing query
 drawFrameAngle = UI::Command.new("Draw Pré-Cadre Angle") {
   #ID Global
-  idMAIN = {"ANGLE|POS": "Position de l'angle du retour",
-            "ANGLE|VAL": "Valeur Trigonometrique de l'angle du retour [°]",
+  idMAIN = {"ANGLE|POS": "Position de l'angle du retour [G ou D]",
+            "ANGLE|VAL": "Valeur de l'angle du retour [°]",
             "OSS|W": "Largeur du poteau d'Angle de renfort [mm]",
             "OSS|ALL": "Hauteur d'Allège sous la fenêtre [mm]",
-            "OSS|LIN": "Hauteur de Linteau au-dessus de la fenêtre [mm]",
-            "DOOR?":"Activation d'une porte axe principal opposé à l'Angle [X]"}
-  defaultMAIN = ["G|D", "90","120", "1000", "450", "X"]
+            "OSS|LIN": "Hauteur de Linteau au-dessus de la fenêtre [mm]"}
+  defaultMAIN = ["G|D", "90","120", "1000", "450"]
 
   #Request the Corner Frame Nomenclature
   ids = idMAIN.keys
@@ -168,6 +169,7 @@ drawFrameAngle = UI::Command.new("Draw Pré-Cadre Angle") {
   #Generate the Frame Hash Data
   frameData = genFrameDataHash(ids, answersArray)
   frameData.keys.each{|del| frameData.delete(del) if del.include?("NA")}
+  frameData["ANGLE"]["POS"] = (frameData["ANGLE"]["POS"] == "D" ? "R" : "L")
 
   #Generate Drawing
   newCorner = PH::CornerFrame.new(frameData)
@@ -175,17 +177,16 @@ drawFrameAngle = UI::Command.new("Draw Pré-Cadre Angle") {
 }
 
 #Command Specs
-toolbarPH = toolbarPH.add_item drawFrameAngle
-iconName = "[24x24]_Angle Window.png"
+iconName = "[32x32]_Frame Angle.png"
 drawFrameAngle.small_icon = "#{iconsFolder}#{iconName}"
 drawFrameAngle.large_icon = "#{iconsFolder}#{iconName}"
 drawFrameAngle.status_bar_text = "Combiner les PréCadres selectionnés en PréCadres d'angle."
 drawFrameAngle.tooltip = "ANGLE FRAME"
-toolbarPH = toolbarPH.add_item drawFrameAngle
+toolbarPH = toolbarPH.add_item drawFrameAngle if PH::AUTORIZE
 
 
 #GENERATE THE TOOLBAR
-toolbarPH.show
+toolbarPH.show if PH::AUTORIZE
 
 
 #ADDITIVE METHODS

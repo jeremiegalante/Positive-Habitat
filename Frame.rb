@@ -5,6 +5,9 @@ require 'json'
 require_relative 'PH'
 require_relative 'patch/hash'
 
+'''
+Passage du CS intégrant les montants en largeur et rajouter l epaisseur en plus
+'''
 class PH::Frame
   #CLASS VARIABLE
   @@posteXpos = {}
@@ -12,6 +15,7 @@ class PH::Frame
   @@posteNextYPos = {}
   @@posteData = {}
   @@store = {}
+  @@nomenclatureByID = {}
 
   #CLASS VARIABLE ACCESSORS
   def self.posteData; return @@posteData; end
@@ -26,9 +30,16 @@ class PH::Frame
   @atCoord = []
   @data
 
+  #ANGLE CONNECTIONS POINTS VARIABLE
+  @object_connL
+  @object_connR
+
   #INSTANCE VARIABLE ACCESSORS
   attr_accessor :object
   attr_accessor :data
+  attr_reader :object_connL
+  attr_reader :object_connR
+  attr_reader :ID
 
 
   #CONSTRUCTOR
@@ -39,16 +50,29 @@ class PH::Frame
     @data = argNomenclature
     @ID = @data.delete("ID")
 
-    #Change the ID in case a Frame already exists with the same ID and not the same data
-    @ID = 1
-    @@posteData.keys.sort.each do |currentID|
-      break if currentID > @ID
-      @ID += 1 if @@posteData[currentID] != @data
+    #Check if a frame with the same ID with different nomenclature was previously generated
+    isNomenclatureChanged =  (!@@nomenclatureByID[@ID].nil? and !(@@nomenclatureByID[@ID] >= argNomenclature))
+
+    #In case the ID is reused
+    if isNomenclatureChanged
+      #Erase the SKP poste object with the ID
+      @@store.each{|currentEntity, currentFrame| currentEntity.erase! if currentFrame.ID == @ID}
+
+      #Purge unused definitions
+      Sketchup.active_model.definitions.purge_unused
+
+      #Reinitialise the class variables
+      @@posteXpos[@ID] = 0
+      @@posteNextYPos[@ID] = 0
+      @@posteData.delete(@ID)
+      @@store.delete_if{|currentFrame, currentData| currentData.ID == @ID}
     end
-    #@ID = rand 500..1000 if @@posteData.keys.include? @ID and @@posteData[@ID] != @data
+
+    #Store the nomenclature associated indexed by the ID
+    @@nomenclatureByID[@ID] = argNomenclature #unless (@@nomenclatureByID.include?(@ID))
 
     #Store the new data generated
-    @@posteData[@ID] = @data unless @@posteData.keys.include?(@ID)
+    @@posteData[@ID] = @data
 
     #Generate Frame container
     @object = Sketchup.active_model.active_entities.add_group
@@ -67,8 +91,36 @@ class PH::Frame
     @matFIN_Name = @data["MAT"]["FIN"]
     @mat[@matFIN_Name] = PH::CFG.getOCLmaterialData(@matFIN_Name) if @matFIN_Name != ""
 
+    #STORE FRAME DIMENSION TO DATA
+    supportT = PH::CFG.getOCLmaterialData("3PlisT10")["Thickness"]
+    @data["DIM"] = {}
+    @data["DIM"]["L"] = @data["FRAME"]["L"] + 2 * (@data["FRAME"]["CMP"] + @mat[@matOSS_Name]["Thickness"])
+    @data["DIM"]["W"] = @data["WALL"]["T"]
+    @data["DIM"]["H"] = PH::CFG.getOCLmaterialData("3PlisT10")["Thickness"] +
+                        45 +
+                        @data["FRAME"]["H"] +
+                        @data["FRAME"]["CMP"] +
+                        @data["CV"]["H"] +
+                        @data["OH"]["H"] +
+                        ((@data["OH"]["H"] == 0 and @data["CS?"] == "X") ? supportT+@data["OH"]["OFF"] : 0)
+
+    #ADD CONNECTION POINTS
+    connL_X = -@mat[@matOSS_Name]["Thickness"]
+    newGroup = @object.entities.add_group()
+    newGroup.name = "LINK L"
+    object_connL = newGroup.entities.add_cpoint([connL_X.mm, @data["WALL"]["T"].mm, 0])
+    #object_connL.hidden = true
+    @object_connL = newGroup
+
+    connR_X = @data["FRAME"]["L"] + @mat[@matOSS_Name]["Thickness"] + 2*@data["FRAME"]["CMP"]
+    newGroup = @object.entities.add_group()
+    newGroup.name = "LINK R"
+    object_connR = newGroup.entities.add_cpoint([connR_X.mm, @data["WALL"]["T"].mm, 0])
+    #object_connR.hidden = true
+    @object_connR = newGroup
+
     #SET POSITION
-    currentID = @ID.to_s.to_sym
+    currentID = @ID#.to_s.to_sym
 
     ##Initialize the position coordinates
     @atCoord = [0, 0, 0]
@@ -122,6 +174,13 @@ class PH::Frame
 
     #Sore this Frame
     @@store[@object] = self
+    '''
+    if @@store_byId[@ID].is_a? Array
+      @@store_byId[@ID] << @object
+    else
+      @@store_byId[@ID] = [@object]
+    end
+    '''
   end
 
 
@@ -364,7 +423,7 @@ class PH::Frame
     cvAltitude = supportT + 45 +
                  @data["FRAME"]["H"] +
                  @data["FRAME"]["CMPB"]
-    ohAltitude = cvAltitude + @data["CV"]["H"]
+    ohAltitude = cvAltitude + @data["CV"]["H"] + seatedMatData["Thickness"]
 
     #Define vertical item heights according CV, OH, CS? settings in case of no CS is requested
     ## And no OH is requested withdraw margin from CV height
@@ -379,6 +438,9 @@ class PH::Frame
         vertOHheight -= @data["CV"]["CMP"]
       end
     end
+
+    ##Adjust height in case os CS
+    vertOHheight - (( @data["OH"]["H"] == 0 and @data["CS?"] == "X") ? supportT+@data["OH"]["OFF"] : 0)
 
 
     #DRAW VOLET HORIZONTAL
