@@ -98,11 +98,11 @@ class PH::Frame
     @data["DIM"]["W"] = @data["WALL"]["T"]
     @data["DIM"]["H"] = PH::CFG.getOCLmaterialData("3PlisT10")["Thickness"] +
                         45 +
+                        @data["FRAME"]["CMPB"] +
                         @data["FRAME"]["H"] +
                         @data["FRAME"]["CMP"] +
                         @data["CV"]["H"] +
-                        @data["OH"]["H"] +
-                        ((@data["OH"]["H"] == 0 and @data["CS?"] == "X") ? supportT+@data["OH"]["OFF"] : 0)
+                        @data["OH"]["H"]
 
     #ADD CONNECTION POINTS
     connL_X = -@mat[@matOSS_Name]["Thickness"]
@@ -257,7 +257,7 @@ class PH::Frame
     dessousPSEheight = 45 + PH::CFG.getOCLmaterialData("3PlisT10")["Thickness"]
 
     #Generate Bottom Instance
-    itemComponentInstances << PH::SKP.drawOBJ(coordsObjH, -@data["FRAME"]["T"], argCDname:"#{componentDefinitionName}Bottom", argCIpos:[@data["FRAME"]["CMPB"], @data["WALL"]["FD"], dessousPSEheight], argContainer:newGroup)
+    itemComponentInstances << PH::SKP.drawOBJ(coordsObjH, -@data["FRAME"]["T"], argCDname:"#{componentDefinitionName}Bottom", argCIpos:[@data["FRAME"]["CMP"], @data["WALL"]["FD"], dessousPSEheight], argContainer:newGroup)
 
     #Generate Top Instance
     itemComponentInstances << PH::SKP.drawOBJ(coordsObjH, -@data["FRAME"]["T"], argCDname:"#{componentDefinitionName}Top", argCIpos:[@data["FRAME"]["CMP"], @data["WALL"]["FD"], dessousPSEheight+@data["FRAME"]["H"]-@data["FRAME"]["T"]], argContainer:newGroup)
@@ -272,6 +272,9 @@ class PH::Frame
     itemComponentInstances.each do |currentCI|
       currentCI.material = PH::SKP.getShader("Frame")
     end
+
+    #Apply the Compribande bottom space
+    newGroup.move!(Geom::Transformation.new [0, 0, (@data["FRAME"]["CMPB"]).mm])
 
     return itemComponentInstances
   end
@@ -291,14 +294,6 @@ class PH::Frame
       "Z" => [0, 0]
     }
 
-    supportT = PH::CFG.getOCLmaterialData("3PlisT10")["Thickness"]
-    studHeight = supportT + 45 +
-                 @data["FRAME"]["H"] +
-                 @data["FRAME"]["CMPB"] +
-                 @data["CV"]["H"] +
-                 @data["OH"]["H"] +
-                 (( @data["OH"]["H"] == 0 and @data["CS?"] == "X") ? supportT+@data["OH"]["OFF"] : 0)
-
     #Define Component Names
     componentDefinitionName = "P#{@ID}|MONTANT PX_"
 
@@ -306,10 +301,10 @@ class PH::Frame
     itemComponentInstances = []
 
     #Generate Left Instance
-    itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -studHeight, argCDname:"#{componentDefinitionName}Left", argCIpos:[-@mat[@matOSS_Name]["Thickness"], 0, 0], argContainer:@object)
+    itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -@data["DIM"]["H"], argCDname:"#{componentDefinitionName}Left", argCIpos:[-@mat[@matOSS_Name]["Thickness"], 0, 0], argContainer:@object)
 
     #Generate Right Instance
-    itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -studHeight, argCDname:"#{componentDefinitionName}Right", argCIpos:[@data["FRAME"]["L"]+@data["FRAME"]["CMP"]+@data["FRAME"]["CMPB"], 0, 0], argContainer:@object)
+    itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -@data["DIM"]["H"], argCDname:"#{componentDefinitionName}Right", argCIpos:[@data["FRAME"]["L"]+@data["FRAME"]["CMP"]+@data["FRAME"]["CMP"], 0, 0], argContainer:@object)
 
     #Apply OCL material
     itemComponentInstances.each do |currentCI|
@@ -320,7 +315,7 @@ class PH::Frame
     if @data["CS?"] == "X"
       ##Define Drawing Coords
       chapeau_height = PH::CFG.getOCLmaterialData("3PlisT10")["Thickness"]
-      chapeauLength = @data["FRAME"]["L"] + @data["FRAME"]["CMP"] + @data["FRAME"]["CMPB"]
+      chapeauLength = @data["FRAME"]["L"] + 2*@data["FRAME"]["CMP"] + 2*matData["Thickness"]
       coordsObj = {
         "X" => [0, chapeauLength],
         "Y" => [0, @data["WALL"]["T"]],
@@ -331,7 +326,7 @@ class PH::Frame
       componentDefinitionName = "P#{@ID}|CHAPEAU"
 
       #Generate Instance
-      itemComponentInstances << PH::SKP.drawOBJ(coordsObj, chapeau_height, argCDname:componentDefinitionName, argCIpos:[0, 0, studHeight-@data["OH"]["OFF"]], argContainer:@object)
+      itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -chapeau_height, argCDname:componentDefinitionName, argCIpos:[-matData["Thickness"], 0, @data["DIM"]["H"]], argContainer:@object)
       itemComponentInstances[-1].material = PH::SKP.getShader("3PlisT10")
     end
 
@@ -367,7 +362,7 @@ class PH::Frame
     newGroup = @object.entities.add_group
     newFace = newGroup.entities.add_face(face_coords)
     newFace.reverse!
-    newFace.pushpull((@data["FRAME"]["L"]+@data["FRAME"]["CMP"]+@data["FRAME"]["CMPB"]).mm)
+    newFace.pushpull((@data["FRAME"]["L"]+@data["FRAME"]["CMP"]+@data["FRAME"]["CMP"]).mm)
 
     ##Transform to OCL Element
     componentInstances << newGroup.to_component
@@ -385,7 +380,7 @@ class PH::Frame
     #BOTTOM SEATED
     ##Define Drawing Coords
     bottom_height = PH::CFG.getOCLmaterialData("3PlisT10")["Thickness"]
-    bottomLength = @data["FRAME"]["L"] + @data["FRAME"]["CMP"] + @data["FRAME"]["CMPB"]
+    bottomLength = @data["FRAME"]["L"] + @data["FRAME"]["CMP"] + @data["FRAME"]["CMP"]
     coordsObj = {
       "Y" => [0, @data["WALL"]["T"]],
       "Z" => [0, bottom_height],
@@ -418,12 +413,13 @@ class PH::Frame
     seatedMatData = PH::CFG.getOCLmaterialData("3PlisT10")
 
     #Get dimensions to use
-    itemsLength = @data["FRAME"]["L"] + @data["FRAME"]["CMP"] + @data["FRAME"]["CMPB"]
+    itemsLength = @data["FRAME"]["L"] + @data["FRAME"]["CMP"] + @data["FRAME"]["CMP"]
     supportT = PH::CFG.getOCLmaterialData("3PlisT10")["Thickness"]
     cvAltitude = supportT + 45 +
+                 @data["FRAME"]["CMPB"] +
                  @data["FRAME"]["H"] +
-                 @data["FRAME"]["CMPB"]
-    ohAltitude = cvAltitude + @data["CV"]["H"] + seatedMatData["Thickness"]
+                 @data["FRAME"]["CMP"]
+    ohAltitude = cvAltitude + @data["CV"]["H"]
 
     #Define vertical item heights according CV, OH, CS? settings in case of no CS is requested
     ## And no OH is requested withdraw margin from CV height
@@ -531,6 +527,7 @@ class PH::Frame
     offsetBAlu = @data["BA?"] == "X" ? @data["FIN"]["SGAP"] : 0
     studFinWidth = @data["WALL"]["FD"] + @data["FIN"]["EGAP"] - offsetBAlu
     studFinHeight = @data["FRAME"]["H"] +
+                    @data["FRAME"]["CMPB"] +
                     @data["FRAME"]["CMP"] +
                     @data["CV"]["H"] -
                     (10 + @data["FIN"]["VGAP"])
@@ -539,7 +536,7 @@ class PH::Frame
                     0,
                     (supportT + 45) + 10 + @data["FIN"]["VGAP"]]
 
-    rightPosition = [matDataOSS["Thickness"] + @data["FRAME"]["L"] + @data["FRAME"]["CMP"] + @data["FRAME"]["CMPB"] - matDataFIN["Thickness"],
+    rightPosition = [matDataOSS["Thickness"] + @data["FRAME"]["L"] + 2*@data["FRAME"]["CMP"] - matDataFIN["Thickness"],
                      0,
                      (supportT + 45) + 10 + @data["FIN"]["VGAP"]]
 

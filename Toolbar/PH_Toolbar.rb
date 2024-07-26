@@ -73,6 +73,7 @@ drawFrameFromMenu = UI::Command.new("Génération Pré-Cadre") {
   ids = idSPLIT.keys[0..0] + idMEN.keys + idSPLIT.keys[1..1] + idCV.keys + idSPLIT.keys[2..2] + idFIN.keys + idSPLIT.keys[3..3] + idOPTIONS.keys
   prompts = idSPLIT.values[0..0] + idMEN.values + idSPLIT.values[1..1] + idCV.values + idSPLIT.values[2..2] + idFIN.values + idSPLIT.values[3..3] + idOPTIONS.values
   defaults = defaultSPLIT + defaultMEN + defaultSPLIT + defaultCV + defaultSPLIT + defaultFIN + defaultSPLIT + defaultOPTIONS
+  (1..100).each{|id| exists = (PH::Frame.posteData.keys.include? id); defaults[1] = id unless exists; break unless exists}
   answersArray = UI.inputbox(prompts, defaults, "Paramètres du Pré-Cadre.")
 
   #Convert String values to Integer if possible
@@ -184,6 +185,98 @@ drawFrameAngle.status_bar_text = "Combiner les PréCadres selectionnés en PréC
 drawFrameAngle.tooltip = "ANGLE FRAME"
 toolbarPH = toolbarPH.add_item drawFrameAngle if PH::AUTORIZE
 
+
+#EDIT FRAME CONTEXTUAL MENU
+UI.add_context_menu_handler do |context_menu|
+  context_menu.add_item("Modification") {
+    if PH::AUTORIZE
+      #Grab Nomenclature from selection
+      currentSelection = Sketchup.active_model.selection.to_a
+
+      #Cast a warning message if not a single Poste is selected
+      if currentSelection.length != 1 and currentSelection[0].class == Sketchup::Group and currentSelection[0].name.include? "POSTE"
+        UI.messagebox("Selectionnez un seul POSTE généré")
+
+      #Launch parameters
+      else
+        #Isolate Selection
+        currentSelection = currentSelection[0]
+
+        #Grab Nomenclature
+        currentID = currentSelection.name.gsub("POSTE ", "").to_i
+        currentNomenclature = PH::Frame.posteData[currentID]
+
+        ##SECTION MENUISERIE
+        defaultMENnew = [currentID] + currentNomenclature["FRAME"].values[0...-1]
+
+        #SECTION COFFRE VOLLET
+        defaultCVnew = [currentNomenclature["CV"]["H"], currentNomenclature["OH"]["H"], currentNomenclature["OH"]["OFF"], currentNomenclature["CS?"]]
+
+        #SECTION FINITIONS
+        defaultFINnew = [currentNomenclature["FIN?"]] + currentNomenclature["FIN"].values[0..4] + [currentNomenclature["BA?"]]
+
+        #SECTION OPTIONS
+        defaultOPTIONSnew = [currentNomenclature["WALL"]["T"], currentNomenclature["WALL"]["FD"], currentNomenclature["FRAME"]["T"], currentNomenclature["MAT"]["OSS"], currentNomenclature["MAT"]["FIN"]]
+
+        #Request the Frame Nomenclature
+        ids = idSPLIT.keys[0..0] + idMEN.keys + idSPLIT.keys[1..1] + idCV.keys + idSPLIT.keys[2..2] + idFIN.keys + idSPLIT.keys[3..3] + idOPTIONS.keys
+        prompts = idSPLIT.values[0..0] + idMEN.values + idSPLIT.values[1..1] + idCV.values + idSPLIT.values[2..2] + idFIN.values + idSPLIT.values[3..3] + idOPTIONS.values
+        defaults = defaultSPLIT + defaultMENnew + defaultSPLIT + defaultCVnew + defaultSPLIT + defaultFINnew + defaultSPLIT + defaultOPTIONSnew
+        answersArray = UI.inputbox(prompts, defaults, "Modification des paramètres du Pré-Cadre.")
+
+        #Convert String values to Integer if possible
+        answersArray.collect! do |originalValue|
+          (originalValue == originalValue.to_i.to_s) ? originalValue.to_i : originalValue
+        end
+
+        #Merge answers with default values
+        answersMerge = []
+        answersArray.each_with_index do |currentVal, currentIndex|
+          originalVal = currentVal
+          originalVal = defaults[currentIndex] if !ids[currentIndex].to_s.include?("?")
+          answersMerge[currentIndex] = (currentVal != "") ? currentVal : originalVal
+        end
+
+        #Generate the Frame Hash Data
+        frameData = genFrameDataHash(ids, answersMerge)
+        frameData.keys.each{|del| frameData.delete(del) if del.include?("NA")}
+
+        #Generate Drawing
+        newFrame = PH::Frame.new(frameData)
+        newFrame.draw
+      end
+    end
+  }
+
+  drawFrameFromMenu = UI::Command.new("Génération Pré-Cadre") {
+    #Request the Frame Nomenclature
+    ids = idSPLIT.keys[0..0] + idMEN.keys + idSPLIT.keys[1..1] + idCV.keys + idSPLIT.keys[2..2] + idFIN.keys + idSPLIT.keys[3..3] + idOPTIONS.keys
+    prompts = idSPLIT.values[0..0] + idMEN.values + idSPLIT.values[1..1] + idCV.values + idSPLIT.values[2..2] + idFIN.values + idSPLIT.values[3..3] + idOPTIONS.values
+    defaults = defaultSPLIT + defaultMEN + defaultSPLIT + defaultCV + defaultSPLIT + defaultFIN + defaultSPLIT + defaultOPTIONS
+    answersArray = UI.inputbox(prompts, defaults, "Paramètres du Pré-Cadre.")
+
+    #Convert String values to Integer if possible
+    answersArray.collect! do |originalValue|
+      (originalValue == originalValue.to_i.to_s) ? originalValue.to_i : originalValue
+    end
+
+    #Merge answers with default values
+    answersMerge = []
+    answersArray.each_with_index do |currentVal, currentIndex|
+      originalVal = currentVal
+      originalVal = defaults[currentIndex] if !ids[currentIndex].to_s.include?("?")
+      answersMerge[currentIndex] = (currentVal != "") ? currentVal : originalVal
+    end
+
+    #Generate the Frame Hash Data
+    frameData = genFrameDataHash(ids, answersMerge)
+    frameData.keys.each{|del| frameData.delete(del) if del.include?("NA")}
+
+    #Generate Drawing
+    newFrame = PH::Frame.new(frameData)
+    newFrame.draw
+  }
+end
 
 #GENERATE THE TOOLBAR
 toolbarPH.show if PH::AUTORIZE
