@@ -3,10 +3,6 @@ load "E:/#GITHUB/PH/Toolbar/PH_Toolbar.rb"
 load "D:/_GITHUB/PH/Toolbar/PH_Toolbar.rb"
 
 DOC YARD https://yardoc.org/
-
-Incrementation ID pour nouveau
-X fois
-Rechargement/Modification nomenclature
 '''
 
 #Load Sketchup Requires

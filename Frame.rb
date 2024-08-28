@@ -5,9 +5,6 @@ require 'json'
 require_relative 'PH'
 require_relative 'patch/hash'
 
-'''
-Passage du CS intégrant les montants en largeur et rajouter l epaisseur en plus
-'''
 class PH::Frame
   #CLASS VARIABLE
   @@posteXpos = {}
@@ -27,18 +24,14 @@ class PH::Frame
   @ID = nil
   @object = nil
   @objectPurgeEntities = []
+  @items = {}
   @atCoord = []
   @data
-
-  #ANGLE CONNECTIONS POINTS VARIABLE
-  @object_connL
-  @object_connR
 
   #INSTANCE VARIABLE ACCESSORS
   attr_accessor :object
   attr_accessor :data
-  attr_reader :object_connL
-  attr_reader :object_connR
+  attr_reader :items
   attr_reader :ID
 
 
@@ -49,6 +42,7 @@ class PH::Frame
     #Create the data a default data hash values
     @data = argNomenclature
     @ID = @data.delete("ID")
+    @items = {}
 
     #Check if a frame with the same ID with different nomenclature was previously generated
     isNomenclatureChanged =  (!@@nomenclatureByID[@ID].nil? and !(@@nomenclatureByID[@ID] >= argNomenclature))
@@ -104,21 +98,6 @@ class PH::Frame
                         @data["CV"]["H"] +
                         @data["OH"]["H"]
 
-    #ADD CONNECTION POINTS
-    connL_X = -@mat[@matOSS_Name]["Thickness"]
-    newGroup = @object.entities.add_group()
-    newGroup.name = "LINK L"
-    object_connL = newGroup.entities.add_cpoint([connL_X.mm, @data["WALL"]["T"].mm, 0])
-    #object_connL.hidden = true
-    @object_connL = newGroup
-
-    connR_X = @data["FRAME"]["L"] + @mat[@matOSS_Name]["Thickness"] + 2*@data["FRAME"]["CMP"]
-    newGroup = @object.entities.add_group()
-    newGroup.name = "LINK R"
-    object_connR = newGroup.entities.add_cpoint([connR_X.mm, @data["WALL"]["T"].mm, 0])
-    #object_connR.hidden = true
-    @object_connR = newGroup
-
     #SET POSITION
     currentID = @ID#.to_s.to_sym
 
@@ -153,34 +132,13 @@ class PH::Frame
     ##Update Frame next position
     @@posteNextYPos[currentID] += @data["WALL"]["T"] + 1000
 
-    '''
-    #STORE DATA IN ATTRIBUTE DICTIONARY
-    ##Get the model Attribute Dictionary
-    adName = "DATA"
-    adDataCurrentModel = Sketchup.active_model.attribute_dictionaries[adName]
-    adDataCurrentModel = Sketchup.active_model.attribute_dictionary(adName, true) if adDataCurrentModel.nil?
-
-    ##Get the model Frame Data
-    adFrameDataName = "frameData"
-    adFrameData = adDataCurrentModel[adFrameDataName]
-    if adFrameData.nil?
-      #create to Poste data and add it
-      adFrameData = {@ID => @data}
-    else
-      #Just store the it
-      adFrameData[@ID] = @data
-    end
-    '''
-
     #Sore this Frame
     @@store[@object] = self
-    '''
-    if @@store_byId[@ID].is_a? Array
-      @@store_byId[@ID] << @object
-    else
-      @@store_byId[@ID] = [@object]
-    end
-    '''
+
+    '#STORE DATA IN ATTRIBUTE DICTIONARY
+    ##Get the model Attribute Dictionary
+    @object.set_attribute("FRAME", "DATA", @data)
+    ad = @object.attribute_dictionary("FRAME", false).storeFrameData(argFrame, argName, argValue)'
   end
 
 
@@ -252,6 +210,12 @@ class PH::Frame
     @objectPurgeEntities << newGroup.entities.add_cpoint(Geom::Point3d.new)
     newGroup.name = "Pré-Cadre Fenêtre"
 
+    #Add entities storage to the frame
+    @items["PC"] = {}
+    '{"NAME":newGroup.name,
+                    "GRP":newGroup,
+                    "ENT":[]}'
+
     #Generate Items
     frameV_height = @data["FRAME"]["H"] - 2 * @data["FRAME"]["T"]
     dessousPSEheight = 45 + PH::CFG.getOCLmaterialData("3PlisT10")["Thickness"]
@@ -267,6 +231,9 @@ class PH::Frame
 
     #Generate Right Instance
     itemComponentInstances << PH::SKP.drawOBJ(coordsObjV, -frameV_height, argCDname:"#{componentDefinitionName}Right", argCIpos:[@data["FRAME"]["CMP"]+@data["FRAME"]["L"]-@data["FRAME"]["T"], @data["WALL"]["FD"], dessousPSEheight+@data["FRAME"]["T"]], argContainer:newGroup)
+
+    #Store entities
+    @items["PC"]["ENT"] = itemComponentInstances
 
     #Apply OCL material
     itemComponentInstances.each do |currentCI|
@@ -311,6 +278,8 @@ class PH::Frame
       currentCI.material = PH::SKP.getShader(@matOSS_Name)
     end
 
+    @items["STUDS|OSS"] = itemComponentInstances
+
     #Generate Châpeau if requested
     if @data["CS?"] == "X"
       ##Define Drawing Coords
@@ -328,6 +297,7 @@ class PH::Frame
       #Generate Instance
       itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -chapeau_height, argCDname:componentDefinitionName, argCIpos:[-matData["Thickness"], 0, @data["DIM"]["H"]], argContainer:@object)
       itemComponentInstances[-1].material = PH::SKP.getShader("3PlisT10")
+      @items["CHA"] = itemComponentInstances[-1]
     end
 
     return itemComponentInstances
@@ -368,6 +338,7 @@ class PH::Frame
     componentInstances << newGroup.to_component
     componentDefinition = componentInstances[-1].definition
     componentDefinition.name = "P#{@ID}|XPS PX"
+    @items["XPS|PX"] = componentInstances[-1]
 
     ##Move at the right place
     bottomHeight = PH::CFG.getOCLmaterialData("3PlisT10")["Thickness"]
@@ -390,6 +361,7 @@ class PH::Frame
     #Generate Instance
     componentInstances << PH::SKP.drawOBJ(coordsObj, bottomLength, argCDname:"P#{@ID}|BAS PX", argContainer:@object)
     componentInstances[-1].material = PH::SKP.getShader("3PlisT10")
+    @items["XPS|BOT"] = componentInstances[-1]
 
     return componentInstances
   end
@@ -453,6 +425,7 @@ class PH::Frame
     ##Generate Instance
     itemComponentInstances << PH::SKP.drawOBJ(coordsObj, itemsLength, argCDname:"#{componentDefinitionName}Horizontal", argContainer:newGroup)
     itemComponentInstances[-1].material = PH::SKP.getShader(@matOSS_Name)
+    @items["CV|VH"] = itemComponentInstances[-1]
 
     #DRAW VOLET VERTICAL
     ##Define Drawing Coords
@@ -465,6 +438,7 @@ class PH::Frame
     ##Generate Instance
     itemComponentInstances << PH::SKP.drawOBJ(coordsObj, itemsLength, argCDname:"#{componentDefinitionName}Vertical", argContainer:newGroup)
     itemComponentInstances[-1].material = PH::SKP.getShader(@matOSS_Name)
+    @items["CV|VV"] = itemComponentInstances[-1]
 
     #Move Volets items to position
     transformation = Geom::Transformation.new([0, 0, cvAltitude.mm])
@@ -492,6 +466,7 @@ class PH::Frame
       ##Generate Instance
       itemComponentInstances << PH::SKP.drawOBJ(coordsObj, itemsLength, argCDname:"#{componentDefinitionName}Horizontale", argContainer:newGroup)
       itemComponentInstances[-1].material = PH::SKP.getShader("3PlisT10")
+      @items["CV|SHH"] = itemComponentInstances[-1]
 
       #DRAW SUR-HAUTEUR VERTICALE
       ##Define Drawing Coords
@@ -504,6 +479,7 @@ class PH::Frame
       ##Generate Instance
       itemComponentInstances << PH::SKP.drawOBJ(coordsObj, itemsLength, argCDname:"#{componentDefinitionName}Verticale", argContainer:newGroup)
       itemComponentInstances[-1].material = PH::SKP.getShader(@matOSS_Name)
+      @items["CV|SHV"] = itemComponentInstances[-1]
 
       #Move Sur-Hauteur to position
       transformation = Geom::Transformation.new([0, 0, ohAltitude.mm])
@@ -558,6 +534,8 @@ class PH::Frame
 
     #Generate Right Instance
     itemComponentInstances << PH::SKP.drawOBJ(face_coords, matDataFIN["Thickness"], argCDname:"#{componentDefinitionName}Right", argCIpos:rightPosition, argContainer:@object)
+
+    @items["STUDS|FIN"] = itemComponentInstances
 
     #Apply modifications
     itemComponentInstances.each do |currentCI|
