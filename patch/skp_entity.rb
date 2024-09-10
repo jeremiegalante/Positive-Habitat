@@ -79,4 +79,48 @@ class Sketchup::Entity
 
     return self.bounds.corner(bbIndex).to_a.collect{|coord| coord.to_mm}
   end
+
+  def move(arg_moveInto)
+    raise "argMoveInto is not type of Sketchup::Entity" unless arg_moveInto.class <= Sketchup::Entity
+
+    #Create a temporary move group
+    tmpGrp = arg_moveInto.entities.add_group()
+    toDelete = tmpGrp.entities.add_cpoint([0,0,0])
+
+    #Add a copy of the entity
+    newEntity = tmpGrp.entities.add_instance(self.definition, IDENTITY)
+    newEntity.name = self.name
+
+    #Clean the move operation
+    toDelete.erase!
+    movedEntity = tmpGrp.explode[0]
+
+    return movedEntity
+  end
+
+  def filterItems(arg_filterNames)
+    raise "arg_filterNames is not type of Array" unless arg_filterNames.class == Array
+    arg_filterNames.each {|partName| raise "arg_filterNames Array isn't composed of Strings" unless partName.class == String}
+    
+    items = []
+    self.entities.to_a.each do |currentEntity|
+      #Ignore non valid items
+      validClasses = [Sketchup::Group, Sketchup::ComponentInstance, Sketchup::ComponentDefinition]
+      next unless validClasses.include? currentEntity.class
+      
+      #Get this object name
+      currentName = currentEntity.name #if [Sketchup::Group, Sketchup::ComponentDefinition].include? currentEntity.class
+      currentName = currentEntity.definition.name if currentEntity.class == Sketchup::ComponentInstance
+      
+      #Check if the name include the part name
+      arg_filterNames.each do |partName|
+        if currentName.include? partName
+          items << currentEntity
+          break
+        end
+      end
+    end
+    
+    return items
+  end
 end

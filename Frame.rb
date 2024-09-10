@@ -477,7 +477,7 @@ class PH::Frame
       }
 
       ##Generate Instance
-      itemComponentInstances << PH::SKP.drawOBJ(coordsObj, itemsLength, argCDname:"#{componentDefinitionName}Verticale", argContainer:newGroup)
+      itemComponentInstances << PH::SKP.drawOBJ(coordsObj, itemsLength, argCDname:"#{componentDefinitionName}Vertical", argContainer:newGroup)
       itemComponentInstances[-1].material = PH::SKP.getShader(@matOSS_Name)
       @items["CV|SHV"] = itemComponentInstances[-1]
 
