@@ -21,6 +21,10 @@ class PH::Frame
   attr_reader :items
   attr_reader :ID
 
+  #ATTRIBUTE DICTIONARY INSTANCE VARIABLE
+  @entityPartsAD_name
+  @modelFrameAD_name
+
 
   #CONSTRUCTOR
   # Method to create a Frame linked to a Poste NB.
@@ -37,9 +41,12 @@ class PH::Frame
     @ID = @data.delete("ID")
     @items = {}
 
+    #Create an entity parts AD
+    @entityPartsAD_name = "PARTS"
+
     #Check if a frame with the same ID with different nomenclature was previously generated
-    modelFrameAD_name = "FRAMES"
-    modelFrameAD = Sketchup.active_model.get_attribute(modelFrameAD_name, @ID)
+    @modelFrameAD_name = "FRAMES"
+    modelFrameAD = Sketchup.active_model.get_attribute(@modelFrameAD_name, @ID)
     modelFrameAD = eval(modelFrameAD) unless modelFrameAD.nil?
 
     isNomenclatureChanged =  (!modelFrameAD.nil? and (eval(modelFrameAD["Data"]) != @data))
@@ -49,11 +56,11 @@ class PH::Frame
       #Erase the SKP poste object with the ID
       modelFrameAD["Entities"].each do |currentEntityPID|
         currentEntity = Sketchup.active_model.find_entity_by_persistent_id(currentEntityPID)
-        currentEntity.erase!
+        currentEntity.erase! unless currentEntity.nil?
       end
 
       #Empty the Poste from model AD
-      Sketchup.active_model.set_attribute(modelFrameAD_name, @ID, nil)
+      Sketchup.active_model.set_attribute(@modelFrameAD_name, @ID, nil)
 
       #Purge unused definitions
       Sketchup.active_model.definitions.purge_unused
@@ -102,8 +109,7 @@ class PH::Frame
     Sketchup.active_model.start_operation("Modeling Frame #{@poste_name}", disable_ui:true, next_transparent:false, transparent:false)
 
     #STORE DATA IN ATTRIBUTE DICTIONARY
-    modelFrameAD_name = "FRAMES"
-    modelFrameAD = Sketchup.active_model.get_attribute(modelFrameAD_name, @ID)
+    modelFrameAD = Sketchup.active_model.get_attribute(@modelFrameAD_name, @ID)
 
     #In case the Post ID has been initialize before
     unless modelFrameAD.nil?
@@ -113,9 +119,13 @@ class PH::Frame
       @object.erase!
 
       #Copy the last Poste Frame
+      ##Select the last still active Frame
+      lastPostFrameOBJ = nil
+      modelFrameAD["Entities"].reverse_each do |currentFramePID|
+        lastPostFrameOBJ = Sketchup.active_model.find_entity_by_persistent_id(currentFramePID)
+      end
+
       ##Make Copy of the last one
-      lastPostFramePID = modelFrameAD["Entities"][-1]
-      lastPostFrameOBJ = Sketchup.active_model.find_entity_by_persistent_id(lastPostFramePID)
       @object = lastPostFrameOBJ.copy
       @object.name = lastPostFrameOBJ.name
 
@@ -128,7 +138,7 @@ class PH::Frame
 
       #Add this to its Poste Frames
       modelFrameAD["Entities"] << @object.persistent_id
-      Sketchup.active_model.set_attribute(modelFrameAD_name, @ID, modelFrameAD.to_s)
+      Sketchup.active_model.set_attribute(@modelFrameAD_name, @ID, modelFrameAD.to_s)
 
     #Either generate the first one
     else
@@ -139,10 +149,10 @@ class PH::Frame
       modelFrameAD["Entities"] = [@object.persistent_id]
 
       #Set the new poste position
-      nextFrameXvalue = Sketchup.active_model.get_attribute(modelFrameAD_name, "nextFrameX", 0)
+      nextFrameXvalue = Sketchup.active_model.get_attribute(@modelFrameAD_name, "nextFrameX", 0)
       @atCoord[0] = nextFrameXvalue
       nextFrameXvalue += @data["FRAME"]["L"] + 1000
-      Sketchup.active_model.set_attribute(modelFrameAD_name, "nextFrameX", nextFrameXvalue)
+      Sketchup.active_model.set_attribute(@modelFrameAD_name, "nextFrameX", nextFrameXvalue)
 
       #DRAW PRE-CADRE
       draw_precadre
@@ -171,7 +181,7 @@ class PH::Frame
       #@object.add_observer(PH::EntityObserver.new)
 
       #UPDATE THE MODEL FRAMES AD
-      Sketchup.active_model.set_attribute(modelFrameAD_name, @ID, modelFrameAD.to_s)
+      Sketchup.active_model.set_attribute(@modelFrameAD_name, @ID, modelFrameAD.to_s)
     end
 
     #FINALISE OPERATION
