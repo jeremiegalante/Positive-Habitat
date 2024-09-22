@@ -69,7 +69,11 @@ drawFrameFromMenu = UI::Command.new("Génération Pré-Cadre") {
   ids = idSPLIT.keys[0..0] + idMEN.keys + idSPLIT.keys[1..1] + idCV.keys + idSPLIT.keys[2..2] + idFIN.keys + idSPLIT.keys[3..3] + idOPTIONS.keys
   prompts = idSPLIT.values[0..0] + idMEN.values + idSPLIT.values[1..1] + idCV.values + idSPLIT.values[2..2] + idFIN.values + idSPLIT.values[3..3] + idOPTIONS.values
   defaults = defaultSPLIT + defaultMEN + defaultSPLIT + defaultCV + defaultSPLIT + defaultFIN + defaultSPLIT + defaultOPTIONS
-  (1..100).each{|id| exists = (PH::Frame.posteData.keys.include? id); defaults[1] = id unless exists; break unless exists}
+  '''(1..100).each do |currentID|
+    exists = !Sketchup.active_model.get_attribute("FRAMES", currentID).nil?
+    defaults[1] = currentID unless exists
+    break unless exists
+  end'''
   answersArray = UI.inputbox(prompts, defaults, "Paramètres du Pré-Cadre.")
 
   #Convert String values to Integer if possible

@@ -4,22 +4,9 @@ require 'json'
 #Load PH Requires
 require_relative 'PH'
 require_relative 'patch/hash'
+require_relative 'EntityObserver'
 
 class PH::Frame
-  #CLASS VARIABLE
-  @@posteXpos = {}
-  @@nextPosteXpos = 0
-  @@posteNextYPos = {}
-  @@posteData = {}
-  @@store = {}
-  @@nomenclatureByID = {}
-
-  #CLASS VARIABLE ACCESSORS
-  def self.posteData; return @@posteData; end
-  def self.posteData=(newValue); @@posteData = newValue; end
-  def self.store; return @@store; end
-
-
   #INSTANCE VARIABLE
   @ID = nil
   @object = nil
@@ -36,6 +23,12 @@ class PH::Frame
 
 
   #CONSTRUCTOR
+  # Method to create a Frame linked to a Poste NB.
+  # @return self
+  # @!scope instance
+  # @!group Init Method
+  # @version 0.30.0
+  # @since 0.1.0
   def initialize(argNomenclature={})
     raise "argNomenclature is not type of Hash" unless argNomenclature.is_a? Hash
 
@@ -45,28 +38,26 @@ class PH::Frame
     @items = {}
 
     #Check if a frame with the same ID with different nomenclature was previously generated
-    isNomenclatureChanged =  (!@@nomenclatureByID[@ID].nil? and !(@@nomenclatureByID[@ID] >= argNomenclature))
+    modelFrameAD_name = "FRAMES"
+    modelFrameAD = Sketchup.active_model.get_attribute(modelFrameAD_name, @ID)
+    modelFrameAD = eval(modelFrameAD) unless modelFrameAD.nil?
+
+    isNomenclatureChanged =  (!modelFrameAD.nil? and (eval(modelFrameAD["Data"]) != @data))
 
     #In case the ID is reused
     if isNomenclatureChanged
       #Erase the SKP poste object with the ID
-      @@store.each{|currentEntity, currentFrame| currentEntity.erase! if currentFrame.ID == @ID}
+      modelFrameAD["Entities"].each do |currentEntityPID|
+        currentEntity = Sketchup.active_model.find_entity_by_persistent_id(currentEntityPID)
+        currentEntity.erase!
+      end
+
+      #Empty the Poste from model AD
+      Sketchup.active_model.set_attribute(modelFrameAD_name, @ID, nil)
 
       #Purge unused definitions
       Sketchup.active_model.definitions.purge_unused
-
-      #Reinitialise the class variables
-      @@posteXpos[@ID] = 0
-      @@posteNextYPos[@ID] = 0
-      @@posteData.delete(@ID)
-      @@store.delete_if{|currentFrame, currentData| currentData.ID == @ID}
     end
-
-    #Store the nomenclature associated indexed by the ID
-    @@nomenclatureByID[@ID] = argNomenclature #unless (@@nomenclatureByID.include?(@ID))
-
-    #Store the new data generated
-    @@posteData[@ID] = @data
 
     #Generate Frame container
     @object = Sketchup.active_model.active_entities.add_group
@@ -75,9 +66,8 @@ class PH::Frame
     @atCoord = [0, 0, 0]
 
     #Get Material data
-    @mat = {}
-
     ##Get Mat OSS data
+    @mat = {}
     @matOSS_Name = @data["MAT"]["OSS"]
     @mat[@matOSS_Name] = PH::CFG.getOCLmaterialData(@matOSS_Name)
 
@@ -87,58 +77,16 @@ class PH::Frame
 
     #STORE FRAME DIMENSION TO DATA
     supportT = PH::CFG.getOCLmaterialData("3PlisT10")["Thickness"]
-    @data["DIM"] = {}
-    @data["DIM"]["L"] = @data["FRAME"]["L"] + 2 * (@data["FRAME"]["CMP"] + @mat[@matOSS_Name]["Thickness"])
-    @data["DIM"]["W"] = @data["WALL"]["T"]
-    @data["DIM"]["H"] = PH::CFG.getOCLmaterialData("3PlisT10")["Thickness"] +
+    @DIM = {}
+    @DIM["L"] = @data["FRAME"]["L"] + 2 * (@data["FRAME"]["CMP"] + @mat[@matOSS_Name]["Thickness"])
+    @DIM["W"] = @data["WALL"]["T"]
+    @DIM["H"] = PH::CFG.getOCLmaterialData("3PlisT10")["Thickness"] +
                         45 +
                         @data["FRAME"]["CMPB"] +
                         @data["FRAME"]["H"] +
                         @data["FRAME"]["CMP"] +
                         @data["CV"]["H"] +
                         @data["OH"]["H"]
-
-    #SET POSITION
-    currentID = @ID#.to_s.to_sym
-
-    ##Initialize the position coordinates
-    @atCoord = [0, 0, 0]
-
-    ##Generate a new X position in case a Poste hasn't been created before
-    if !@@posteXpos.key?(currentID)
-      #Update this poste X position
-      @@posteXpos[currentID] = @@nextPosteXpos
-      @atCoord[0] = @@posteXpos[currentID]
-
-      #And update the next next X position
-      @@nextPosteXpos += @data["FRAME"]["L"] + 1000
-    end
-
-    ##Set te Poste X position
-    @atCoord[0] = @@posteXpos[currentID]
-
-    ##Set the Y Position
-    ##Get the frame next position if the Poste has already been generated once
-    if @@posteNextYPos.key?(currentID)
-      #Get the next position
-      @atCoord[1] = @@posteNextYPos[currentID]
-
-    ##Start a new Poste position
-    else
-      #Update next Frame of the same Pole Y position
-      @@posteNextYPos[currentID] = 0
-    end
-
-    ##Update Frame next position
-    @@posteNextYPos[currentID] += @data["WALL"]["T"] + 1000
-
-    #Sore this Frame
-    @@store[@object] = self
-
-    '#STORE DATA IN ATTRIBUTE DICTIONARY
-    ##Get the model Attribute Dictionary
-    @object.set_attribute("FRAME", "DATA", @data)
-    ad = @object.attribute_dictionary("FRAME", false).storeFrameData(argFrame, argName, argValue)'
   end
 
 
@@ -147,34 +95,84 @@ class PH::Frame
   # @return nil
   # @!scope instance
   # @!group Drawing Methods
-  # @version 0.10.0
+  # @version 0.30.0
   # @since 0.1.0
   def draw
     #START OPERATION
     Sketchup.active_model.start_operation("Modeling Frame #{@poste_name}", disable_ui:true, next_transparent:false, transparent:false)
 
-    #DRAW PRE-CADRE
-    draw_precadre
+    #STORE DATA IN ATTRIBUTE DICTIONARY
+    modelFrameAD_name = "FRAMES"
+    modelFrameAD = Sketchup.active_model.get_attribute(modelFrameAD_name, @ID)
 
-    #DRAW STUDS
-    draw_studs
+    #In case the Post ID has been initialize before
+    unless modelFrameAD.nil?
+      modelFrameAD = eval(modelFrameAD)
 
-    #DRAW PSE ASSISE
-    draw_xps
+      #Delete the empty Object
+      @object.erase!
 
-    #DRAW Coffret/Volet
-    draw_CV if @data["CV"]["H"] > 0
+      #Copy the last Poste Frame
+      ##Make Copy of the last one
+      lastPostFramePID = modelFrameAD["Entities"][-1]
+      lastPostFrameOBJ = Sketchup.active_model.find_entity_by_persistent_id(lastPostFramePID)
+      @object = lastPostFrameOBJ.copy
+      @object.name = lastPostFrameOBJ.name
 
-    #DRAW FENÊTRE/BOIS
-    draw_finishingStuds if @data["MAT"]["FIN"] != ""
+      ##Offset the copy on Y
+      moveVector = [lastPostFrameOBJ.bounds.corner(0).to_a[0],
+                    ((@data["WALL"]["T"] + 1000) * modelFrameAD["Entities"].length).mm,
+                    0]
+      move = Geom::Transformation.new(moveVector)
+      @object.move!(move)
 
-    #CLEAN/DELETE SECURITY ENTITIES
-    @objectPurgeEntities.each {|entityToDelete| entityToDelete.erase! unless entityToDelete.deleted?}
+      #Add this to its Poste Frames
+      modelFrameAD["Entities"] << @object.persistent_id
+      Sketchup.active_model.set_attribute(modelFrameAD_name, @ID, modelFrameAD.to_s)
 
-    #MOVE AT THE RIGHT POSITION
-    atCoord_mm = @atCoord.collect {|value| value.mm}
-    moveTo = Geom::Transformation.new(atCoord_mm)
-    @object.move!(moveTo)
+    #Either generate the first one
+    else
+      #PREPARE DRAWING
+      #Create AD content
+      modelFrameAD = {}
+      modelFrameAD["Data"] = @data.to_s
+      modelFrameAD["Entities"] = [@object.persistent_id]
+
+      #Set the new poste position
+      nextFrameXvalue = Sketchup.active_model.get_attribute(modelFrameAD_name, "nextFrameX", 0)
+      @atCoord[0] = nextFrameXvalue
+      nextFrameXvalue += @data["FRAME"]["L"] + 1000
+      Sketchup.active_model.set_attribute(modelFrameAD_name, "nextFrameX", nextFrameXvalue)
+
+      #DRAW PRE-CADRE
+      draw_precadre
+
+      #DRAW STUDS
+      draw_studs
+
+      #DRAW PSE ASSISE
+      draw_xps
+
+      #DRAW Coffret/Volet
+      draw_CV if @data["CV"]["H"] > 0
+
+      #DRAW FENÊTRE/BOIS
+      draw_finishingStuds if @data["MAT"]["FIN"] != ""
+
+      #CLEAN/DELETE SECURITY ENTITIES
+      @objectPurgeEntities.each {|entityToDelete| entityToDelete.erase! unless entityToDelete.deleted?}
+
+      #MOVE AT THE RIGHT POSITION
+      atCoord_mm = @atCoord.collect {|value| value.mm}
+      moveTo = Geom::Transformation.new(atCoord_mm)
+      @object.move!(moveTo)
+
+      #ADD ERASE OBSERVER
+      #@object.add_observer(PH::EntityObserver.new)
+
+      #UPDATE THE MODEL FRAMES AD
+      Sketchup.active_model.set_attribute(modelFrameAD_name, @ID, modelFrameAD.to_s)
+    end
 
     #FINALISE OPERATION
     commit_result = Sketchup.active_model.commit_operation
@@ -268,10 +266,10 @@ class PH::Frame
     itemComponentInstances = []
 
     #Generate Left Instance
-    itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -@data["DIM"]["H"], argCDname:"#{componentDefinitionName}Left", argCIpos:[-@mat[@matOSS_Name]["Thickness"], 0, 0], argContainer:@object)
+    itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -@DIM["H"], argCDname:"#{componentDefinitionName}Left", argCIpos:[-@mat[@matOSS_Name]["Thickness"], 0, 0], argContainer:@object)
 
     #Generate Right Instance
-    itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -@data["DIM"]["H"], argCDname:"#{componentDefinitionName}Right", argCIpos:[@data["FRAME"]["L"]+@data["FRAME"]["CMP"]+@data["FRAME"]["CMP"], 0, 0], argContainer:@object)
+    itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -@DIM["H"], argCDname:"#{componentDefinitionName}Right", argCIpos:[@data["FRAME"]["L"]+@data["FRAME"]["CMP"]+@data["FRAME"]["CMP"], 0, 0], argContainer:@object)
 
     #Apply OCL material
     itemComponentInstances.each do |currentCI|
@@ -295,7 +293,7 @@ class PH::Frame
       componentDefinitionName = "P#{@ID}|CHAPEAU"
 
       #Generate Instance
-      itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -chapeau_height, argCDname:componentDefinitionName, argCIpos:[-matData["Thickness"], 0, @data["DIM"]["H"]], argContainer:@object)
+      itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -chapeau_height, argCDname:componentDefinitionName, argCIpos:[-matData["Thickness"], 0, @DIM["H"]], argContainer:@object)
       itemComponentInstances[-1].material = PH::SKP.getShader("3PlisT10")
       @items["CHA"] = itemComponentInstances[-1]
     end
@@ -541,19 +539,5 @@ class PH::Frame
     itemComponentInstances.each do |currentCI|
       currentCI.material = PH::SKP.getShader(@matFIN_Name)
     end
-  end
-
-
-  #CLASS METHODS
-  # Method to reinitialise Postes drawing positions.
-  # @return nil
-  # @!scope class
-  # @!group Maintenance
-  # @version 0.11.2
-  # @since 0.11.2
-  def self.initPostesPositions
-    @@posteXpos = {}
-    @@nextPosteXpos = 0
-    @@posteNextYPos = {}
   end
 end
