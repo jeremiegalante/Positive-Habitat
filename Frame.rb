@@ -45,13 +45,14 @@ class PH::Frame
     @entityPartsAD_name = "PARTS"
 
     #Check if a frame with the same ID with different nomenclature was previously generated
+    @entityAD_name = "DATA"
     @modelFrameAD_name = "FRAMES"
     modelFrameAD = Sketchup.active_model.get_attribute(@modelFrameAD_name, @ID)
     modelFrameAD = eval(modelFrameAD) unless modelFrameAD.nil?
 
+    #In case the ID is reused
     isNomenclatureChanged =  (!modelFrameAD.nil? and (eval(modelFrameAD["Data"]) != @data))
 
-    #In case the ID is reused
     if isNomenclatureChanged
       #Erase the SKP poste object with the ID
       modelFrameAD["Entities"].each do |currentEntityPID|
@@ -70,7 +71,6 @@ class PH::Frame
     @object = Sketchup.active_model.active_entities.add_group
     @object.name = "POSTE #{@ID}"
     @objectPurgeEntities = [@object.entities.add_cpoint(Geom::Point3d.new)]
-    @atCoord = [0, 0, 0]
 
     #Get Material data
     ##Get Mat OSS data
@@ -94,6 +94,43 @@ class PH::Frame
                         @data["FRAME"]["CMP"] +
                         @data["CV"]["H"] +
                         @data["OH"]["H"]
+
+    #DEFINE THE OBJECT POSITION
+    @atCoord =[0, 0, 0]
+
+    #Extract the X coord
+    ##Get and apply the next Poste ID X position
+    atCoordX = Sketchup.active_model.get_attribute(@modelFrameAD_name, "nextFrameX", 0)
+    unless modelFrameAD.nil?
+      firstFramePID = modelFrameAD["Entities"][0]
+      firstFrameOBJ = Sketchup.active_model.find_entity_by_persistent_id(firstFramePID)
+      atCoordX = firstFrameOBJ.bounds.corner(0).to_a[0].to_mm
+    end
+    @atCoord[0] = atCoordX
+
+    ##Set next X position to model AD
+    atCoordX += @data["FRAME"]["L"] + 1000
+    Sketchup.active_model.set_attribute(@modelFrameAD_name, "nextFrameX", atCoordX)
+
+    #Evaluate the Y Coord
+    atCoordY = 0
+
+    unless modelFrameAD.nil?
+      posteEntities = modelFrameAD["Entities"].collect{|currentFramePID| Sketchup.active_model.find_entity_by_persistent_id(currentFramePID)}
+
+      #Identify the last Poste Frame drawn with this ID
+      lastPostFrameOBJ = nil
+      posteEntities.reverse_each do |currentFrame|
+        lastPostFrameOBJ = currentFrame unless currentFrame.nil?
+        break unless lastPostFrameOBJ.nil?
+      end
+
+      #Define the Y coord
+      atCoordY = lastPostFrameOBJ.nil? ? 0 : lastPostFrameOBJ.bounds.corner(2).to_a[1].to_mm + 1000
+    end
+
+    #Set the Y coord
+    @atCoord[1] = atCoordY
   end
 
 
@@ -109,84 +146,58 @@ class PH::Frame
     Sketchup.active_model.start_operation("Modeling Frame #{@poste_name}", disable_ui:true, next_transparent:false, transparent:false)
 
     #STORE DATA IN ATTRIBUTE DICTIONARY
-    modelFrameAD = Sketchup.active_model.get_attribute(@modelFrameAD_name, @ID)
+    modelFrameAD = Sketchup.active_model.get_attribute(@modelFrameAD_name, @ID, {})
+    modelFrameAD = eval(modelFrameAD) if modelFrameAD.class == String
 
-    #In case the Post ID has been initialize before
-    unless modelFrameAD.nil?
-      modelFrameAD = eval(modelFrameAD)
-
-      #Delete the empty Object
-      @object.erase!
-
-      #Copy the last Poste Frame
-      ##Select the last still active Frame
-      lastPostFrameOBJ = nil
-      modelFrameAD["Entities"].reverse_each do |currentFramePID|
-        lastPostFrameOBJ = Sketchup.active_model.find_entity_by_persistent_id(currentFramePID)
-      end
-
-      ##Make Copy of the last one
-      @object = lastPostFrameOBJ.copy
-      @object.name = lastPostFrameOBJ.name
-
-      ##Offset the copy on Y
-      moveVector = [lastPostFrameOBJ.bounds.corner(0).to_a[0],
-                    ((@data["WALL"]["T"] + 1000) * modelFrameAD["Entities"].length).mm,
-                    0]
-      move = Geom::Transformation.new(moveVector)
-      @object.move!(move)
-
-      #Add this to its Poste Frames
-      modelFrameAD["Entities"] << @object.persistent_id
-      Sketchup.active_model.set_attribute(@modelFrameAD_name, @ID, modelFrameAD.to_s)
-
-    #Either generate the first one
-    else
-      #PREPARE DRAWING
-      #Create AD content
+      #ADD ENTITY To THE AD CONTENT
+    if modelFrameAD.empty?
       modelFrameAD = {}
       modelFrameAD["Data"] = @data.to_s
-      modelFrameAD["Entities"] = [@object.persistent_id]
-
-      #Set the new poste position
-      nextFrameXvalue = Sketchup.active_model.get_attribute(@modelFrameAD_name, "nextFrameX", 0)
-      @atCoord[0] = nextFrameXvalue
-      nextFrameXvalue += @data["FRAME"]["L"] + 1000
-      Sketchup.active_model.set_attribute(@modelFrameAD_name, "nextFrameX", nextFrameXvalue)
-
-      #DRAW PRE-CADRE
-      draw_precadre
-
-      #DRAW STUDS
-      draw_studs
-
-      #DRAW PSE ASSISE
-      draw_xps
-
-      #DRAW Coffret/Volet
-      draw_CV if @data["CV"]["H"] > 0
-
-      #DRAW FENÊTRE/BOIS
-      draw_finishingStuds if @data["MAT"]["FIN"] != ""
-
-      #CLEAN/DELETE SECURITY ENTITIES
-      @objectPurgeEntities.each {|entityToDelete| entityToDelete.erase! unless entityToDelete.deleted?}
-
-      #MOVE AT THE RIGHT POSITION
-      atCoord_mm = @atCoord.collect {|value| value.mm}
-      moveTo = Geom::Transformation.new(atCoord_mm)
-      @object.move!(moveTo)
-
-      #ADD ERASE OBSERVER
-      #@object.add_observer(PH::EntityObserver.new)
-
-      #UPDATE THE MODEL FRAMES AD
-      Sketchup.active_model.set_attribute(@modelFrameAD_name, @ID, modelFrameAD.to_s)
+      modelFrameAD["Entities"] = []
     end
+    modelFrameAD["Entities"] << @object.persistent_id
+
+    #DRAW PRE-CADRE
+    draw_precadre
+
+    #DRAW STUDS
+    draw_studs
+
+    #DRAW PSE ASSISE
+    draw_xps
+
+    #DRAW Coffret/Volet
+    draw_CV if @data["CV"]["H"] > 0
+
+    #DRAW FENÊTRE/BOIS
+    draw_finishingStuds if @data["MAT"]["FIN"] != ""
+
+    #CLEAN/DELETE SECURITY ENTITIES
+    @objectPurgeEntities.each {|entityToDelete| entityToDelete.erase! unless entityToDelete.deleted?}
+
+    #MOVE AT THE RIGHT POSITION
+    atCoord_mm = @atCoord.collect {|value| value.mm}
+    moveTo = Geom::Transformation.new(atCoord_mm)
+    @object.move!(moveTo)
+
+    #ADD ERASE OBSERVER
+    #@object.add_observer(PH::EntityObserver.new)
+
+    #UPDATE THE MODEL FRAME AD
+    Sketchup.active_model.set_attribute(@modelFrameAD_name, @ID, modelFrameAD.to_s)
 
     #FINALISE OPERATION
     commit_result = Sketchup.active_model.commit_operation
     raise "Drawing Pré-Cadre has been an unsuccessful result when commiting it " unless commit_result
+
+    #####
+    display = false
+    if display
+      test = ["PC", "STUDS|OSS", "CHA", "XPS|PX", "XPS|BOT", "CV|VH", "CV|VV", "CV|SHH", "CV|SHV", "STUDS|FIN"]
+      test = @object.attribute_dictionaries[@entityAD_name].keys
+      puts "\n#{@ID}"
+      test.each{|key| puts "<#{key}>#{@object.get_attribute(@entityAD_name, key, "")}"}
+    end
   end
 
   # Method to draw the Pré-Cadre.
@@ -218,12 +229,6 @@ class PH::Frame
     @objectPurgeEntities << newGroup.entities.add_cpoint(Geom::Point3d.new)
     newGroup.name = "Pré-Cadre Fenêtre"
 
-    #Add entities storage to the frame
-    @items["PC"] = {}
-    '{"NAME":newGroup.name,
-                    "GRP":newGroup,
-                    "ENT":[]}'
-
     #Generate Items
     frameV_height = @data["FRAME"]["H"] - 2 * @data["FRAME"]["T"]
     dessousPSEheight = 45 + PH::CFG.getOCLmaterialData("3PlisT10")["Thickness"]
@@ -240,8 +245,8 @@ class PH::Frame
     #Generate Right Instance
     itemComponentInstances << PH::SKP.drawOBJ(coordsObjV, -frameV_height, argCDname:"#{componentDefinitionName}Right", argCIpos:[@data["FRAME"]["CMP"]+@data["FRAME"]["L"]-@data["FRAME"]["T"], @data["WALL"]["FD"], dessousPSEheight+@data["FRAME"]["T"]], argContainer:newGroup)
 
-    #Store entities
-    @items["PC"]["ENT"] = itemComponentInstances
+    #Store entity
+    @object.set_attribute(@entityAD_name, "PC", [newGroup.persistent_id].to_s)
 
     #Apply OCL material
     itemComponentInstances.each do |currentCI|
@@ -286,7 +291,8 @@ class PH::Frame
       currentCI.material = PH::SKP.getShader(@matOSS_Name)
     end
 
-    @items["STUDS|OSS"] = itemComponentInstances
+    #Store entity
+    @object.set_attribute(@entityAD_name, "STUDS|OSS", itemComponentInstances.collect{|current| current.persistent_id}.to_s)
 
     #Generate Châpeau if requested
     if @data["CS?"] == "X"
@@ -305,7 +311,7 @@ class PH::Frame
       #Generate Instance
       itemComponentInstances << PH::SKP.drawOBJ(coordsObj, -chapeau_height, argCDname:componentDefinitionName, argCIpos:[-matData["Thickness"], 0, @DIM["H"]], argContainer:@object)
       itemComponentInstances[-1].material = PH::SKP.getShader("3PlisT10")
-      @items["CHA"] = itemComponentInstances[-1]
+      @object.set_attribute(@entityAD_name, "CHA", [itemComponentInstances[-1].persistent_id].to_s)
     end
 
     return itemComponentInstances
@@ -346,7 +352,7 @@ class PH::Frame
     componentInstances << newGroup.to_component
     componentDefinition = componentInstances[-1].definition
     componentDefinition.name = "P#{@ID}|XPS PX"
-    @items["XPS|PX"] = componentInstances[-1]
+    @object.set_attribute(@entityAD_name, "XPS|PX", [componentInstances[-1].persistent_id].to_s)
 
     ##Move at the right place
     bottomHeight = PH::CFG.getOCLmaterialData("3PlisT10")["Thickness"]
@@ -369,7 +375,7 @@ class PH::Frame
     #Generate Instance
     componentInstances << PH::SKP.drawOBJ(coordsObj, bottomLength, argCDname:"P#{@ID}|BAS PX", argContainer:@object)
     componentInstances[-1].material = PH::SKP.getShader("3PlisT10")
-    @items["XPS|BOT"] = componentInstances[-1]
+    @object.set_attribute(@entityAD_name, "XPS|BOT", [componentInstances[-1].persistent_id].to_s)
 
     return componentInstances
   end
@@ -433,7 +439,7 @@ class PH::Frame
     ##Generate Instance
     itemComponentInstances << PH::SKP.drawOBJ(coordsObj, itemsLength, argCDname:"#{componentDefinitionName}Horizontal", argContainer:newGroup)
     itemComponentInstances[-1].material = PH::SKP.getShader(@matOSS_Name)
-    @items["CV|VH"] = itemComponentInstances[-1]
+    @object.set_attribute(@entityAD_name, "CV|VH", [itemComponentInstances[-1].persistent_id].to_s)
 
     #DRAW VOLET VERTICAL
     ##Define Drawing Coords
@@ -446,7 +452,7 @@ class PH::Frame
     ##Generate Instance
     itemComponentInstances << PH::SKP.drawOBJ(coordsObj, itemsLength, argCDname:"#{componentDefinitionName}Vertical", argContainer:newGroup)
     itemComponentInstances[-1].material = PH::SKP.getShader(@matOSS_Name)
-    @items["CV|VV"] = itemComponentInstances[-1]
+    @object.set_attribute(@entityAD_name, "CV|VV", [itemComponentInstances[-1].persistent_id].to_s)
 
     #Move Volets items to position
     transformation = Geom::Transformation.new([0, 0, cvAltitude.mm])
@@ -474,7 +480,7 @@ class PH::Frame
       ##Generate Instance
       itemComponentInstances << PH::SKP.drawOBJ(coordsObj, itemsLength, argCDname:"#{componentDefinitionName}Horizontale", argContainer:newGroup)
       itemComponentInstances[-1].material = PH::SKP.getShader("3PlisT10")
-      @items["CV|SHH"] = itemComponentInstances[-1]
+      @object.set_attribute(@entityAD_name, "CV|SHH", [itemComponentInstances[-1].persistent_id].to_s)
 
       #DRAW SUR-HAUTEUR VERTICALE
       ##Define Drawing Coords
@@ -487,7 +493,7 @@ class PH::Frame
       ##Generate Instance
       itemComponentInstances << PH::SKP.drawOBJ(coordsObj, itemsLength, argCDname:"#{componentDefinitionName}Vertical", argContainer:newGroup)
       itemComponentInstances[-1].material = PH::SKP.getShader(@matOSS_Name)
-      @items["CV|SHV"] = itemComponentInstances[-1]
+      @object.set_attribute(@entityAD_name, "CV|SHV", [itemComponentInstances[-1].persistent_id].to_s)
 
       #Move Sur-Hauteur to position
       transformation = Geom::Transformation.new([0, 0, ohAltitude.mm])
@@ -543,7 +549,7 @@ class PH::Frame
     #Generate Right Instance
     itemComponentInstances << PH::SKP.drawOBJ(face_coords, matDataFIN["Thickness"], argCDname:"#{componentDefinitionName}Right", argCIpos:rightPosition, argContainer:@object)
 
-    @items["STUDS|FIN"] = itemComponentInstances
+    @object.set_attribute(@entityAD_name, "STUDS|FIN", itemComponentInstances.collect{|current| current.persistent_id}.to_s)
 
     #Apply modifications
     itemComponentInstances.each do |currentCI|
