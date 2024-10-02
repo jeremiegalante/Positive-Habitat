@@ -57,8 +57,15 @@ class PH::Frame
       #Erase the SKP poste object with the ID
       modelFrameAD["Entities"].each do |currentEntityPID|
         currentEntity = Sketchup.active_model.find_entity_by_persistent_id(currentEntityPID)
-        currentEntity.erase! unless currentEntity.nil?
+        unless currentEntity.nil?
+          #Backup the X Position
+          atCoordX = currentEntity.bounds.corner(0).to_a[0].to_mm if atCoordX.nil?
+
+          #Delete the object
+          currentEntity.erase!
+        end
       end
+      modelFrameAD["Entities"] = []
 
       #Empty the Poste from model AD
       Sketchup.active_model.set_attribute(@modelFrameAD_name, @ID, nil)
@@ -101,7 +108,7 @@ class PH::Frame
     #Extract the X coord
     ##Get and apply the next Poste ID X position
     atCoordX = Sketchup.active_model.get_attribute(@modelFrameAD_name, "nextFrameX", 0)
-    unless modelFrameAD.nil?
+    unless modelFrameAD.nil? and !isNomenclatureChanged
       firstFramePID = modelFrameAD["Entities"][0]
       firstFrameOBJ = Sketchup.active_model.find_entity_by_persistent_id(firstFramePID)
       atCoordX = firstFrameOBJ.bounds.corner(0).to_a[0].to_mm
@@ -131,6 +138,9 @@ class PH::Frame
 
     #Set the Y coord
     @atCoord[1] = atCoordY
+
+    #UPDATE THE MODEL FRAME AD
+    Sketchup.active_model.set_attribute(@modelFrameAD_name, @ID, modelFrameAD.to_s)
   end
 
 
@@ -150,7 +160,7 @@ class PH::Frame
     modelFrameAD = eval(modelFrameAD) if modelFrameAD.class == String
 
       #ADD ENTITY To THE AD CONTENT
-    if modelFrameAD.empty?
+    if modelFrameAD.nil? or modelFrameAD.empty?
       modelFrameAD = {}
       modelFrameAD["Data"] = @data.to_s
       modelFrameAD["Entities"] = []
@@ -195,7 +205,6 @@ class PH::Frame
     if display
       test = ["PC", "STUDS|OSS", "CHA", "XPS|PX", "XPS|BOT", "CV|VH", "CV|VV", "CV|SHH", "CV|SHV", "STUDS|FIN"]
       test = @object.attribute_dictionaries[@entityAD_name].keys
-      puts "\n#{@ID}"
       test.each{|key| puts "<#{key}>#{@object.get_attribute(@entityAD_name, key, "")}"}
     end
   end

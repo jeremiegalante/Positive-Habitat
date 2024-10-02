@@ -77,7 +77,6 @@ class PH::SelectionObserver < Sketchup::SelectionObserver
     ##In case of entity removing
     @@orderedSelection.delete(remEntity) unless remEntity.nil?
 
-    puts @@orderedSelection
     return @@orderedSelection
   end
 
