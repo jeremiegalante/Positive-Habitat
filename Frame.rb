@@ -38,7 +38,7 @@ class PH::Frame
 
     #Create the data a default data hash values
     @data = argNomenclature
-    @ID = @data.delete("ID")
+    @ID = @data["ID"]
     @items = {}
 
     #Create an entity parts AD
@@ -195,6 +195,9 @@ class PH::Frame
 
     #UPDATE THE MODEL FRAME AD
     Sketchup.active_model.set_attribute(@modelFrameAD_name, @ID, modelFrameAD.to_s)
+
+    #BACKUP THE DATA AS OBJECT AD
+    @object.set_attribute(@entityAD_name, "DATA", @data.to_s)
 
     #FINALISE OPERATION
     commit_result = Sketchup.active_model.commit_operation

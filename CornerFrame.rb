@@ -9,6 +9,7 @@ require_relative 'Frame'
 require_relative 'patch/skp_drawingElement'
 require_relative 'patch/skp_entities'
 require_relative 'patch/skp_entity'
+#require_relative 'patch/skp_definition'
 #require_relative 'patch/skp_attributeDictionary'
 
 class PH::CornerFrame
@@ -75,8 +76,6 @@ class PH::CornerFrame
     #DATA
     #Store the new data generated
     @@posteData[@ID] = @data unless @@posteData.keys.include?(@ID)
-
-    toDelete.erase!
   end
 
   def assemble
@@ -171,10 +170,10 @@ class PH::CornerFrame
         #Alter FIN stud height
         if newCD.name.include? "FIN"
           pushPullValue -= angleFrameData["OH"]["H"]
-          #pushPullValue -= 55
+          pushPullValue -= 31
         end
 
-          #PushPull the highest faces
+        #PushPull the highest faces
         inbetweenStudHighestFace = newCD.entities.findFace("Z", 0, ">")[0]
         inbetweenStudHighestFace.pushpull(-pushPullValue.mm)
 
@@ -190,7 +189,7 @@ class PH::CornerFrame
       angleFrame_XPS = Sketchup.active_model.find_entity_by_persistent_id(angleFrame_XPSpid)
 
       ##Evaluate the PushPull value
-      gapValue = angleFrameData["FRAME"]["CMP"]
+      gapValue = angleFrameData["FRAME"]["CMP"] + doorFrameData["FRAME"]["CMP"]
       gapValue *= -1 if (@data["ANGLE"]["POS"] == "L")
 
       ##Duplicate the CD before modifying them
@@ -208,209 +207,48 @@ class PH::CornerFrame
         newCI
       end
 
-      exit
-
-
-
-
-
-
-
-
-
-      ##Filter the angle component instance studs
-      angleStuds = @cornerObjects[1]["ENT"].entities.to_a.select{|currentEntity| currentEntity.is_a?(Sketchup::ComponentInstance)}
-      angleStuds.select!{|currentInstance| currentInstance.definition.name.include? angleSideName}
-
-      ##Delete them
-      angleStuds.each {|current| current.erase!}
-
-      #Deal with the door studs
-      ##Filter the door component instance studs
-      doorStuds = @cornerObjects[2]["ENT"].entities.to_a.select{|currentEntity| currentEntity.is_a?(Sketchup::ComponentInstance)}
-      doorStuds.select!{|currentInstance| currentInstance.definition.name.include? doorSideName}
-
-      ##Reduce their height
-      studPX = nil
-      studFIN = nil
-
-      doorStuds.each do |current|
-        #Make a new definition
-        cdName = current.definition.name
-        current.make_unique
-        current.definition.name = "PA#{@ID}|#{cdName.split("|")[-1].split("_")[0]}_Central"
-
-        studPX = current if cdName.include? "PX"
-        studFIN = current if cdName.include? "FIN"
-      end
-
-      #Resize the stud PX
-      ##Find the highest face
-      highestFace, altFace = studPX.definition.entities.findFace("Z", 0, ">=")
-
-      ##Altitude of angle frame
-      angleBBox = @cornerObjects[1]["ENT"].bounds
-      altAngleFrame = (angleBBox.min[-1]-angleBBox.max[-1]).to_mm.round
-
-      #Modify the height
-      highestFace.pushpull(altAngleFrame.mm)
-
-      #Resize the stud FIN
-      ##Find the highest face
-      highestFace, altFace = studFIN.definition.entities.findFace("Z", 0, ">=")
-
-      #Modify the height
-      highestFace.pushpull((studPX.bounds.depth.to_mm - studFIN.bounds.depth.to_mm).mm)
-
-      #Adjust the length of the angle XPS items
-      ##Filter the door component instance XPS items
-      anglePXitems = @cornerObjects[2]["ENT"].entities.to_a.select{|currentEntity| currentEntity.is_a?(Sketchup::ComponentInstance)}
-      anglePXitems.select!{|currentInstance| currentInstance.definition.name.include? "BAS PX" or currentInstance.definition.name.include? "XPS PX"}
-
-      anglePXitems.each do |currentPX|
-        #Make a new definition
-        cdName = currentPX.definition.name
-        currentPX.make_unique
-        currentPX.definition.name = "PA#{@ID}|#{cdName.split("|")[-1]}"
-
-        #Find the extreme position face
-        currentPX_face = nil
-        searchLimit = 0
-        searchSymbol = ">="
-        if @data["ANGLE"]["POS"]=="R"
-          searchLimit = angleFrameData["FRAME"]["CMP"]
-          searchSymbol = ">"
-        end
-
-        currentPX_face, position = currentPX.definition.entities.findFace("X", searchLimit, searchSymbol)
-
-        #Modify the height
-        currentPX_face.pushpull(-angleFrameData["FRAME"]["CMP"].mm)
-      end
 
       #CAISSONS CV
-      #Split Vert and Horiz to merge frames parts
-      ##Get angle/door AD
-      angle_entityAD = @cornerObjects[1]["AD"]
-      puts
-      door_entityAD = @cornerObjects[2]["AD"]
-
-      ["CHA", "XPS|PX", "XPS|BOT"]
       ##Build Caisson CV data
-      caisonsObjectsVH = {"CV"=>{"H"=>[angle_entityAD["CV|VH"],
-                                       door_entityAD["CV|VH"]],
-                                 "V"=>[angle_entityAD["CV|VV"],
-                                       door_entityAD["CV|VV"]]},
-                          "CVOH"=> {"H"=>[angle_entityAD["CV|SHH"],
-                                          door_entityAD["CV|SHH"]],
-                                    "V"=>[angle_entityAD["CV|SHV"],
-                                          door_entityAD["CV|SHV"]]},
-                          'NO'=> {"CHA"=>[angle_entityAD["CHA"],
-                                          door_entityAD["CHA"]],
-                                  "XPS|PX"=>[angle_entityAD["XPS|PX"],
-                                          door_entityAD["XPS|PX"]],
-                                  "XPS|BOT"=>[angle_entityAD["XPS|BOT"],
-                                          door_entityAD["XPS|BOT"]]
-                          }
-      }
+      caisonsObjectsTags = ["CV|VH", "CV|VV", "CV|SHH", "CV|SHV", "CHA"]
+      caisonsObjectsVH = {}
+      caisonsObjectsTags.each do |currentTag|
+        #Grab the entity PID that match the tag on both angle and door frames
+        [1,2].each do |cuurrentIndex|
+          #Grab the item from entity PersistantID
+          frameItem_persistantID = @cornerObjects[cuurrentIndex]["ENT"].get_attribute(entityAD_name, currentTag, 0)
+          frameItem_instance = Sketchup.active_model.find_entity_by_persistent_id(eval(frameItem_persistantID))[-1]
 
-      ##Reterieve objects from PID
-      stop = 0
-      caisonsObjectsVH.each_pair do |cvKey, cvContent|
-        cvObjects = cvContent.collect do |alignKey, alignValue|
-            #Convert PID string to value
-            alignValue.collect!{|current| eval(current.to_s).nil? ? "".to_i : eval(current.to_s)[-1].to_i}
+          #In case of frame type
+          case cuurrentIndex
+          #Door frame
+          when 2
+            #Delete it
+            frameItem_instance.erase! unless frameItem_instance.nil?
 
-            #Convert to object
-            alignValue.collect!{|current| Sketchup.active_model.find_entity_by_persistent_id(current)}
+          #Angle frame
+          when 1
+            #Backup data and duplicate the instance
+            oldFrameItem_definition = frameItem_instance.definition
+            oldFrameItem_material = frameItem_instance.material
+            frameItem_instance = frameItem_instance.make_unique
 
-            #Update value with object extracted from persistent ID
-            caisonsObjectsVH[cvKey][alignKey] = alignValue
-        end
-      end
+            #Update the instance and definition data
+            frameItem_definition = frameItem_instance.definition
+            frameItem_definition.name = "PA#{@ID}|#{oldFrameItem_definition.name.split("|")[-1]}"
 
-      #Regroup the caissons items
-      toDelete = []
+            #Extend the good side face
+            searchValue = (@data["ANGLE"]["POS"]=="L") ? @cornerObjects[1]["DATA"]["FRAME"]["L"].round(0) * 0.75 : 0
+            searchSymbol = (@data["ANGLE"]["POS"]=="L") ? ">=" : "<="
 
-      caisonsObjectsVH.each do |currentSet, currentGroup|
-        currentGroup.each do |currentAlignment, currentInstances|
-          ##Store merge items before merging them
-          caisonObjectName = currentInstances.collect{|current| current.definition.name.split("|")[-1]}.uniq[0]
-          caisonObjectMat = currentInstances.collect{|current| current.material}.uniq[0]
+            faceToExtend = frameItem_definition.entities.findFaceBis("X", searchValue, searchSymbol)[0]
+            faceToExtend.pushpull(@cornerObjects[2]["DATA"]["FRAME"]["L"].mm)
 
-          #Create container of the objects to merge
-          toComponent = @object.entities.add_group()
-          toDelete << toComponent.entities.add_cpoint([0,0,0])
-
-          #Merge items
-          currentInstances.collect!{|currentItem| currentItem.move(toComponent)}
-
-          ##Get position to place the door item
-          angleItemPos = currentInstances[0].bounds.corner(@data["ANGLE"]["POS"]=="L" ? 6 : 7)
-          doorItemPos = currentInstances[1].bounds.corner(@data["ANGLE"]["POS"]=="L" ? 7 : 6)
-
-          ##Move and adjust the connexion
-          moveToConnect = angleItemPos.to_a.each_with_index.map{|value, index| value - doorItemPos[index]}
-          currentInstances[1].move!(moveToConnect)
-
-          #Reduce length of the door item to remove the compriband(CMP) spaces
-          currentInstances[1] = currentInstances[1].make_unique
-          findSymbol = (@data["ANGLE"]["POS"]=="L" ? "==" : ">")
-          faceToPush, drop = currentInstances[1].definition.entities.findFace("X", 0, findSymbol)
-          faceToPush.pushpull(-(angleCMP + doorCMP).mm)
-
-          ##Explode Items and save SKP parameters
-          ###Explode the old instances
-          currentInstances.collect!{|itm| itm.explode}
-
-          #Clean and generate the component instance
-          ##Define the Bbox min point
-          deleteBBoxMin = toComponent.bounds.min.to_a.collect{|value| value.to_mm}
-          deleteBBoxMin[0] += 1
-
-          ##Define the Bbox max point
-          deleteBBoxMax = toComponent.bounds.max.to_a.collect{|value| value.to_mm}
-          deleteBBoxMax[0] -= 1
-
-          ##Delete middle merge edges
-          deleteBBox = Geom::BoundingBox.new()
-          [deleteBBoxMin, deleteBBoxMax].each{|currentBBox| deleteBBox.add(currentBBox.collect{|value| value.mm})}
-
-          edgesListing = toComponent.entities.to_a.select{|elem| elem.class == Sketchup::Edge}
-          edgesListing.each do |currentEdge|
-            #If the edge as not be deleted automatically
-            unless currentEdge.deleted?
-              #Check if this edge is in the deleting bbox
-              vertexStartIn = deleteBBox.contains?(currentEdge.vertices[0])
-              vertexEndIn = deleteBBox.contains?(currentEdge.vertices[1])
-
-              #Delete the edge if it s included in the deleting bbox
-              currentEdge.erase! if vertexStartIn and vertexEndIn
-            end
           end
-
-          #Move UP merge elements
-          toComponent.move!([0, 0, 55.mm])
-
-          #Create Component Instance
-          mergeComponent = toComponent.to_component
-          mergeComponent.definition.name = "PA#{@ID}|#{caisonObjectName}"
-          mergeComponent.material = caisonObjectMat
-
-          #Replace the Merge Component
-          ##Define height according the actual set
-          heightMoveValue = angleFrameData["FRAME"]["H"] + angleFrameData["FRAME"]["CMPB"] + angleFrameData["FRAME"]["CMP"]
-          heightMoveValue += angleFrameData["CV"]["H"] if currentSet == "CVOH"
-          vector_mm = [0,0,heightMoveValue.mm]
-
-          ##Move the merge component
-          moveMergeTo = Geom::Transformation.new(vector_mm)
-          mergeComponent.move!(moveMergeTo)
-
-          #Delete the non merged items
-          #currentInstances.each{|currentNonMerge| currentNonMerge.erase!}
         end
       end
+
+      exit
 
       #Clean Construction Points
       #toDelete.each{|temp| temp.erase!}
